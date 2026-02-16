@@ -51,6 +51,14 @@ func pullAction(_ *cobra.Command, _ []string) error {
 		sources = append(sources, tg)
 	}
 
+	if len(cfg.Sources.RSS.Feeds) > 0 {
+		rs, err := source.NewRSS(cfg.Sources.RSS.Feeds)
+		if err != nil {
+			return fmt.Errorf("create rss source: %w", err)
+		}
+		sources = append(sources, rs)
+	}
+
 	totalInserted := 0
 	channels := make(map[string]bool)
 

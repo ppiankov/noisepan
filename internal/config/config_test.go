@@ -176,7 +176,7 @@ digest:
 	}
 }
 
-func TestLoad_MissingChannels(t *testing.T) {
+func TestLoad_NoSources(t *testing.T) {
 	dir := t.TempDir()
 	writeTestYAML(t, dir, DefaultConfigFile, `
 sources:
@@ -186,10 +186,31 @@ sources:
 
 	_, err := Load(dir)
 	if err == nil {
-		t.Fatal("expected error for missing channels")
+		t.Fatal("expected error for no sources")
 	}
-	if want := "at least one channel is required"; !strings.Contains(err.Error(), want) {
+	if want := "at least one source must be configured"; !strings.Contains(err.Error(), want) {
 		t.Errorf("error = %q, want containing %q", err, want)
+	}
+}
+
+func TestLoad_RSSOnly(t *testing.T) {
+	dir := t.TempDir()
+	writeTestYAML(t, dir, DefaultConfigFile, `
+sources:
+  rss:
+    feeds:
+      - "https://example.com/feed.xml"
+`)
+
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(cfg.Sources.RSS.Feeds) != 1 {
+		t.Errorf("rss feeds = %v, want 1 feed", cfg.Sources.RSS.Feeds)
+	}
+	if len(cfg.Sources.Telegram.Channels) != 0 {
+		t.Errorf("telegram channels = %v, want empty", cfg.Sources.Telegram.Channels)
 	}
 }
 
