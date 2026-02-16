@@ -240,6 +240,52 @@ func TestFormat_NoANSIWithoutColor(t *testing.T) {
 	}
 }
 
+func TestFormat_AlsoIn_ReadNow(t *testing.T) {
+	f := NewTerminal(false)
+	var buf bytes.Buffer
+
+	item := makeItem(taste.TierReadNow, 10, "security", nil, []string{"CVE found"})
+	item.AlsoIn = []string{"rss/feed1", "reddit/sub1"}
+
+	input := DigestInput{
+		Items:      []DigestItem{item},
+		Channels:   1,
+		TotalPosts: 1,
+		Since:      24 * time.Hour,
+	}
+
+	if err := f.Format(&buf, input); err != nil {
+		t.Fatalf("format: %v", err)
+	}
+
+	if !strings.Contains(buf.String(), "also in: rss/feed1, reddit/sub1") {
+		t.Errorf("output = %q, want containing also in annotation", buf.String())
+	}
+}
+
+func TestFormat_AlsoIn_Skim(t *testing.T) {
+	f := NewTerminal(false)
+	var buf bytes.Buffer
+
+	item := makeItem(taste.TierSkim, 4, "devops", nil, []string{"Update"})
+	item.AlsoIn = []string{"rss/feed2"}
+
+	input := DigestInput{
+		Items:      []DigestItem{item},
+		Channels:   1,
+		TotalPosts: 1,
+		Since:      24 * time.Hour,
+	}
+
+	if err := f.Format(&buf, input); err != nil {
+		t.Fatalf("format: %v", err)
+	}
+
+	if !strings.Contains(buf.String(), "also in: rss/feed2") {
+		t.Errorf("output = %q, want containing also in annotation", buf.String())
+	}
+}
+
 func TestFormat_DurationDays(t *testing.T) {
 	f := NewTerminal(false)
 	var buf bytes.Buffer
