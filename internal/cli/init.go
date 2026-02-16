@@ -74,6 +74,10 @@ sources:
   rss:
     feeds: []
     # - "https://example.com/feed.xml"
+  reddit:
+    subreddits: []
+    # - "devops"
+    # - "kubernetes"
 
 storage:
   path: .noisepan/noisepan.db

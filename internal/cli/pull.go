@@ -59,6 +59,14 @@ func pullAction(_ *cobra.Command, _ []string) error {
 		sources = append(sources, rs)
 	}
 
+	if len(cfg.Sources.Reddit.Subreddits) > 0 {
+		rd, err := source.NewReddit(cfg.Sources.Reddit.Subreddits)
+		if err != nil {
+			return fmt.Errorf("create reddit source: %w", err)
+		}
+		sources = append(sources, rd)
+	}
+
 	totalInserted := 0
 	channels := make(map[string]bool)
 

@@ -34,8 +34,8 @@ func doctorAction(_ *cobra.Command, _ []string) error {
 		printCheck(false, "config.yaml: %v", err)
 		ok = false
 	} else {
-		printCheck(true, "config.yaml (%d telegram channels, %d rss feeds)",
-			len(cfg.Sources.Telegram.Channels), len(cfg.Sources.RSS.Feeds))
+		printCheck(true, "config.yaml (%d telegram channels, %d rss feeds, %d subreddits)",
+			len(cfg.Sources.Telegram.Channels), len(cfg.Sources.RSS.Feeds), len(cfg.Sources.Reddit.Subreddits))
 	}
 
 	// Taste profile
