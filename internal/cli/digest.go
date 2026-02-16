@@ -142,6 +142,21 @@ func digestAction(_ *cobra.Command, _ []string) error {
 		})
 	}
 
+	// Populate "also in" annotations
+	var postIDs []int64
+	for _, pws := range posts {
+		postIDs = append(postIDs, pws.Post.ID)
+	}
+	alsoInMap, err := db.GetAlsoIn(ctx, postIDs)
+	if err != nil {
+		return fmt.Errorf("get also_in: %w", err)
+	}
+	for i, pws := range posts {
+		if channels, ok := alsoInMap[pws.Post.ID]; ok {
+			items[i].AlsoIn = channels
+		}
+	}
+
 	input := digest.DigestInput{
 		Items:      items,
 		Channels:   len(channels),

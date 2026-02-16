@@ -23,6 +23,13 @@ CREATE TABLE IF NOT EXISTS scores (
     explanation  TEXT
 );
 
+CREATE TABLE IF NOT EXISTS post_also_in (
+    post_id  INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    source   TEXT NOT NULL,
+    channel  TEXT NOT NULL,
+    UNIQUE(post_id, source, channel)
+);
+
 CREATE TABLE IF NOT EXISTS metadata (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
