@@ -78,6 +78,9 @@ sources:
     subreddits: []
     # - "devops"
     # - "kubernetes"
+  forgeplan:
+    script: ""
+    # script: /path/to/forge-plan.sh
 
 storage:
   path: .noisepan/noisepan.db
