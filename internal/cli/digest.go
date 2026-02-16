@@ -18,8 +18,9 @@ import (
 )
 
 var (
-	digestSince string
-	noColor     bool
+	digestSince  string
+	digestFormat string
+	noColor      bool
 )
 
 var digestCmd = &cobra.Command{
@@ -30,6 +31,7 @@ var digestCmd = &cobra.Command{
 
 func init() {
 	digestCmd.Flags().StringVar(&digestSince, "since", "", "time window (e.g. 48h)")
+	digestCmd.Flags().StringVar(&digestFormat, "format", "", "output format: terminal, json, markdown")
 	digestCmd.Flags().BoolVar(&noColor, "no-color", false, "disable ANSI colors")
 }
 
@@ -164,7 +166,17 @@ func digestAction(_ *cobra.Command, _ []string) error {
 		Since:      sinceDur,
 	}
 
-	formatter := digest.NewTerminal(!noColor)
+	var formatter digest.Formatter
+	switch digestFormat {
+	case "json":
+		formatter = digest.NewJSON()
+	case "markdown", "md":
+		formatter = digest.NewMarkdown()
+	case "terminal", "":
+		formatter = digest.NewTerminal(!noColor)
+	default:
+		return fmt.Errorf("unknown format %q (want terminal, json, or markdown)", digestFormat)
+	}
 	return formatter.Format(os.Stdout, input)
 }
 
