@@ -193,6 +193,24 @@ sources:
 	}
 }
 
+func TestLoad_RedditOnly(t *testing.T) {
+	dir := t.TempDir()
+	writeTestYAML(t, dir, DefaultConfigFile, `
+sources:
+  reddit:
+    subreddits:
+      - "devops"
+`)
+
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(cfg.Sources.Reddit.Subreddits) != 1 {
+		t.Errorf("reddit subreddits = %v, want 1", cfg.Sources.Reddit.Subreddits)
+	}
+}
+
 func TestLoad_RSSOnly(t *testing.T) {
 	dir := t.TempDir()
 	writeTestYAML(t, dir, DefaultConfigFile, `
