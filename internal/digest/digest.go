@@ -12,6 +12,7 @@ import (
 type DigestItem struct {
 	taste.ScoredPost
 	Summary summarize.Summary
+	AlsoIn  []string
 }
 
 // DigestInput is the full input for a digest formatter.

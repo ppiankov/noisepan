@@ -294,4 +294,148 @@ func TestDeduplicate(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("expected 1 post after dedup, got %d", count)
 	}
+
+	// Verify also_in was recorded
+	var alsoCount int
+	if err := st.db.QueryRow("SELECT COUNT(*) FROM post_also_in").Scan(&alsoCount); err != nil {
+		t.Fatalf("count also_in: %v", err)
+	}
+	if alsoCount != 1 {
+		t.Fatalf("expected 1 also_in, got %d", alsoCount)
+	}
+}
+
+func TestDeduplicate_AlsoIn(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 2, 16, 14, 0, 0, 0, time.UTC)
+
+	keeper, err := st.InsertPost(ctx, PostInput{
+		Source:     "telegram",
+		Channel:    "chan1",
+		ExternalID: "1",
+		Text:       "duplicate text",
+		PostedAt:   base,
+		FetchedAt:  base.Add(1 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert keeper: %v", err)
+	}
+
+	_, err = st.InsertPost(ctx, PostInput{
+		Source:     "rss",
+		Channel:    "feed1",
+		ExternalID: "a",
+		Text:       "duplicate text",
+		PostedAt:   base.Add(1 * time.Hour),
+		FetchedAt:  base.Add(1*time.Hour + 1*time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert dup: %v", err)
+	}
+
+	deleted, err := st.Deduplicate(ctx)
+	if err != nil {
+		t.Fatalf("deduplicate: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("expected 1 deleted, got %d", deleted)
+	}
+
+	alsoIn, err := st.GetAlsoIn(ctx, []int64{keeper.ID})
+	if err != nil {
+		t.Fatalf("get also_in: %v", err)
+	}
+	if len(alsoIn[keeper.ID]) != 1 {
+		t.Fatalf("expected 1 also_in entry, got %d", len(alsoIn[keeper.ID]))
+	}
+	if alsoIn[keeper.ID][0] != "rss/feed1" {
+		t.Errorf("also_in = %q, want rss/feed1", alsoIn[keeper.ID][0])
+	}
+}
+
+func TestDeduplicate_MultipleAlsoIn(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 2, 16, 14, 0, 0, 0, time.UTC)
+
+	keeper, err := st.InsertPost(ctx, PostInput{
+		Source:     "telegram",
+		Channel:    "chan1",
+		ExternalID: "1",
+		Text:       "triple post",
+		PostedAt:   base,
+		FetchedAt:  base.Add(1 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert keeper: %v", err)
+	}
+
+	_, err = st.InsertPost(ctx, PostInput{
+		Source:     "rss",
+		Channel:    "feed1",
+		ExternalID: "a",
+		Text:       "triple post",
+		PostedAt:   base.Add(1 * time.Hour),
+		FetchedAt:  base.Add(1*time.Hour + 1*time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert dup 1: %v", err)
+	}
+
+	_, err = st.InsertPost(ctx, PostInput{
+		Source:     "reddit",
+		Channel:    "sub1",
+		ExternalID: "x",
+		Text:       "triple post",
+		PostedAt:   base.Add(2 * time.Hour),
+		FetchedAt:  base.Add(2*time.Hour + 1*time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert dup 2: %v", err)
+	}
+
+	deleted, err := st.Deduplicate(ctx)
+	if err != nil {
+		t.Fatalf("deduplicate: %v", err)
+	}
+	if deleted != 2 {
+		t.Fatalf("expected 2 deleted, got %d", deleted)
+	}
+
+	alsoIn, err := st.GetAlsoIn(ctx, []int64{keeper.ID})
+	if err != nil {
+		t.Fatalf("get also_in: %v", err)
+	}
+	if len(alsoIn[keeper.ID]) != 2 {
+		t.Fatalf("expected 2 also_in entries, got %d", len(alsoIn[keeper.ID]))
+	}
+}
+
+func TestGetAlsoIn_Empty(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	alsoIn, err := st.GetAlsoIn(ctx, []int64{999})
+	if err != nil {
+		t.Fatalf("get also_in: %v", err)
+	}
+	if len(alsoIn) != 0 {
+		t.Errorf("expected empty map, got %v", alsoIn)
+	}
+}
+
+func TestGetAlsoIn_NilIDs(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	alsoIn, err := st.GetAlsoIn(ctx, nil)
+	if err != nil {
+		t.Fatalf("get also_in: %v", err)
+	}
+	if alsoIn != nil {
+		t.Errorf("expected nil, got %v", alsoIn)
+	}
 }
