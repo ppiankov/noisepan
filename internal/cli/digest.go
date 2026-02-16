@@ -93,8 +93,23 @@ func digestAction(_ *cobra.Command, _ []string) error {
 		posts[i].Score = &storeScore
 	}
 
+	// Build summarizers
+	heuristic := &summarize.HeuristicSummarizer{}
+	var llmSummarizer summarize.Summarizer
+	if cfg.Summarize.Mode == "llm" && cfg.Summarize.LLM.APIKey != "" {
+		maxTokens := cfg.Summarize.LLM.MaxTokensPerPost
+		if maxTokens == 0 {
+			maxTokens = 200
+		}
+		llmSummarizer = summarize.NewLLM(
+			cfg.Summarize.LLM.APIKey,
+			cfg.Summarize.LLM.Model,
+			maxTokens,
+			heuristic,
+		)
+	}
+
 	// Build digest items
-	summer := &summarize.HeuristicSummarizer{}
 	channels := make(map[string]bool)
 	var items []digest.DigestItem
 
@@ -113,6 +128,12 @@ func digestAction(_ *cobra.Command, _ []string) error {
 		}
 		if pws.Score.Labels != nil {
 			scored.Labels = pws.Score.Labels
+		}
+
+		// Use LLM for read_now posts, heuristic for everything else
+		var summer summarize.Summarizer = heuristic
+		if llmSummarizer != nil && pws.Score.Tier == taste.TierReadNow {
+			summer = llmSummarizer
 		}
 
 		items = append(items, digest.DigestItem{
