@@ -345,7 +345,7 @@ func (s *Store) Deduplicate(ctx context.Context) (int, error) {
 	}
 
 	rows, err := tx.QueryContext(ctx, `
-		SELECT id, text_hash, posted_at
+		SELECT id, source, channel, text_hash, posted_at
 		FROM posts
 		ORDER BY text_hash, posted_at, id
 	`)
@@ -357,26 +357,37 @@ func (s *Store) Deduplicate(ctx context.Context) (int, error) {
 		_ = rows.Close()
 	}()
 
+	type dupEntry struct {
+		dupID    int64
+		keeperID int64
+		source   string
+		channel  string
+	}
+
 	var (
 		lastHash string
-		toDelete []int64
+		keeperID int64
+		toDelete []dupEntry
 	)
 
 	for rows.Next() {
 		var (
-			id       int64
-			hash     string
-			postedAt string
+			id             int64
+			src, ch        string
+			hash, postedAt string
 		)
-		if err := rows.Scan(&id, &hash, &postedAt); err != nil {
+		if err := rows.Scan(&id, &src, &ch, &hash, &postedAt); err != nil {
 			_ = tx.Rollback()
 			return 0, fmt.Errorf("scan duplicate: %w", err)
 		}
 		if hash == lastHash {
-			toDelete = append(toDelete, id)
+			toDelete = append(toDelete, dupEntry{
+				dupID: id, keeperID: keeperID, source: src, channel: ch,
+			})
 			continue
 		}
 		lastHash = hash
+		keeperID = id
 	}
 	if err := rows.Err(); err != nil {
 		_ = tx.Rollback()
@@ -384,8 +395,21 @@ func (s *Store) Deduplicate(ctx context.Context) (int, error) {
 	}
 
 	deleted := 0
-	for _, id := range toDelete {
-		if _, err := tx.ExecContext(ctx, "DELETE FROM posts WHERE id = ?", id); err != nil {
+	for _, dup := range toDelete {
+		_, err := tx.ExecContext(ctx,
+			"INSERT OR IGNORE INTO post_also_in(post_id, source, channel) VALUES(?, ?, ?)",
+			dup.keeperID, dup.source, dup.channel,
+		)
+		if err != nil {
+			_ = tx.Rollback()
+			return 0, fmt.Errorf("insert also_in: %w", err)
+		}
+
+		if _, err := tx.ExecContext(ctx, "DELETE FROM scores WHERE post_id = ?", dup.dupID); err != nil {
+			_ = tx.Rollback()
+			return 0, fmt.Errorf("delete duplicate score: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM posts WHERE id = ?", dup.dupID); err != nil {
 			_ = tx.Rollback()
 			return 0, fmt.Errorf("delete duplicate post: %w", err)
 		}
@@ -397,6 +421,47 @@ func (s *Store) Deduplicate(ctx context.Context) (int, error) {
 	}
 
 	return deleted, nil
+}
+
+// GetAlsoIn returns "also seen in" channels for the given post IDs.
+// Returns a map of postID → ["source/channel", ...].
+func (s *Store) GetAlsoIn(ctx context.Context, postIDs []int64) (map[int64][]string, error) {
+	if len(postIDs) == 0 {
+		return nil, nil
+	}
+
+	placeholders := make([]string, len(postIDs))
+	args := make([]any, len(postIDs))
+	for i, id := range postIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(
+		"SELECT post_id, source, channel FROM post_also_in WHERE post_id IN (%s)",
+		strings.Join(placeholders, ","),
+	)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query also_in: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	result := make(map[int64][]string)
+	for rows.Next() {
+		var postID int64
+		var src, ch string
+		if err := rows.Scan(&postID, &src, &ch); err != nil {
+			return nil, fmt.Errorf("scan also_in: %w", err)
+		}
+		result[postID] = append(result[postID], src+"/"+ch)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate also_in: %w", err)
+	}
+
+	return result, nil
 }
 
 type rowScanner interface {
