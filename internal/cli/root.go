@@ -13,6 +13,8 @@ var (
 	Commit  = "none"
 )
 
+var configDir string
+
 var rootCmd = &cobra.Command{
 	Use:   "noisepan",
 	Short: "Extract signal from noisy information streams",
@@ -28,7 +30,15 @@ var versionCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringVar(&configDir, "config", ".noisepan", "config directory")
+
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(pullCmd)
+	rootCmd.AddCommand(digestCmd)
+	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(explainCmd)
 }
 
 // Execute runs the root command.
