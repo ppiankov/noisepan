@@ -232,6 +232,23 @@ sources:
 	}
 }
 
+func TestLoad_ForgePlanOnly(t *testing.T) {
+	dir := t.TempDir()
+	writeTestYAML(t, dir, DefaultConfigFile, `
+sources:
+  forgeplan:
+    script: /path/to/forge-plan.sh
+`)
+
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Sources.ForgePlan.Script != "/path/to/forge-plan.sh" {
+		t.Errorf("forgeplan script = %q", cfg.Sources.ForgePlan.Script)
+	}
+}
+
 func TestLoad_InvalidTimezone(t *testing.T) {
 	dir := t.TempDir()
 	writeTestYAML(t, dir, DefaultConfigFile, `
