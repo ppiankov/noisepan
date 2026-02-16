@@ -71,6 +71,9 @@ sources:
     session_dir: .noisepan/session
     channels:
       - "@your_channel_here"
+  rss:
+    feeds: []
+    # - "https://example.com/feed.xml"
 
 storage:
   path: .noisepan/noisepan.db
