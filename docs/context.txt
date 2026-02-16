@@ -1,0 +1,61 @@
+# noisepan — Project Context
+
+## What it is
+Signal extractor for noisy information streams. Reads Telegram channels (and later RSS, Reddit, Medium), scores posts by keyword/rule-based taste profile, summarizes high-signal posts, prints terminal digest.
+
+## What it is NOT
+- Not a Telegram client, chatbot, SaaS, or notification system
+- Not ML/embedding-based (deterministic keyword+rule scoring)
+- No cloud, no accounts, no telemetry
+
+## Current state
+v0.0.0 — scaffolded. CLI skeleton with version command works. No functional commands yet.
+
+## Architecture
+```
+cmd/noisepan/main.go       -- entry point
+internal/
+  cli/                     -- Cobra commands
+  config/                  -- YAML config + taste profile
+  source/                  -- Source interface (telegram, rss, reddit)
+  store/                   -- SQLite storage
+  taste/                   -- Scoring engine
+  summarize/               -- Heuristic + LLM summarizers
+  digest/                  -- Terminal/JSON/Markdown formatters
+```
+
+## Key design decisions
+- Hybrid Python+Go: Telegram collector is Python (Telethon) outputting JSONL, Go reads it
+- SQLite for storage (single file, no server)
+- Taste profile is YAML: keyword weights + rules + thresholds
+- Heuristic summarizer by default (no API needed), LLM optional
+- Pull-based only (cron for scheduling, no daemon)
+- Privacy-first: full text storage off by default, PII redaction patterns
+
+## Dependencies
+- github.com/spf13/cobra (CLI)
+- gopkg.in/yaml.v3 (config)
+- modernc.org/sqlite or mattn/go-sqlite3 (storage)
+- Python 3 + Telethon (Telegram collector)
+
+## Build & verify
+```bash
+make build    # bin/noisepan
+make test     # go test -race -cover ./...
+make lint     # golangci-lint run ./...
+```
+
+## Pending WOs (Phase 1 — MVP)
+- WO-N01: SQLite storage layer
+- WO-N02: Config and taste profile loading
+- WO-N03: Source interface + Telegram collector
+- WO-N04: Taste scoring engine
+- WO-N05: Heuristic summarizer
+- WO-N06: Terminal digest formatter
+- WO-N07: CLI commands (pull, digest, run, init, doctor, explain)
+
+## Conventions
+- Go 1.25+, standard project layout
+- LDFLAGS use VERSION_NUM (no v prefix)
+- Tests mandatory, -race flag, table-driven
+- No magic numbers, no decorative comments

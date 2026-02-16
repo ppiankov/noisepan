@@ -1,0 +1,86 @@
+# noisepan taste profile — defines what is signal and what is noise
+
+weights:
+  high_signal:
+    "cve": 5
+    "incident": 4
+    "postmortem": 4
+    "root cause": 4
+    "expired cert": 5
+    "kubernetes": 3
+    "linkerd": 4
+    "vault": 4
+    "cert-manager": 4
+    "etcd": 3
+    "breaking change": 5
+    "deprecat": 3
+    "migration": 3
+    "outage": 4
+    "zero-day": 5
+    "drift": 3
+
+  low_signal:
+    "hiring": -3
+    "sponsor": -3
+    "webinar": -4
+    "course": -2
+    "subscribe": -3
+    "limited offer": -5
+    "join us": -4
+    "discount": -4
+
+labels:
+  critical:
+    - "cve"
+    - "rce"
+    - "zero-day"
+    - "key compromise"
+  ops:
+    - "kubernetes"
+    - "linkerd"
+    - "vault"
+    - "cert-manager"
+    - "etcd"
+    - "argocd"
+    - "helm"
+  incidents:
+    - "postmortem"
+    - "root cause"
+    - "outage"
+    - "incident"
+
+rules:
+  - if:
+      contains_any: ["expired", "certificate", "notAfter", "rotation"]
+    then:
+      score_add: 4
+      labels: ["ops", "certs"]
+
+  - if:
+      contains_any: ["postmortem", "root cause", "rca", "lessons learned"]
+    then:
+      score_add: 3
+      labels: ["incidents"]
+
+  - if:
+      contains_any: ["CVE-", "zero-day", "critical vulnerability"]
+    then:
+      score_add: 5
+      labels: ["critical"]
+
+  - if:
+      contains_any: ["webinar", "join us", "limited offer", "promo code"]
+    then:
+      score_add: -6
+      labels: ["noise"]
+
+  - if:
+      contains_any: ["breaking change", "deprecat", "removed in"]
+    then:
+      score_add: 4
+      labels: ["ops"]
+
+thresholds:
+  read_now: 7
+  skim: 3
+  ignore: 0

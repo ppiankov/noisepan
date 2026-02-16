@@ -1,0 +1,48 @@
+# noisepan configuration
+
+sources:
+  telegram:
+    # Telegram API credentials (from https://my.telegram.org)
+    api_id_env: TELEGRAM_API_ID
+    api_hash_env: TELEGRAM_API_HASH
+    session_dir: .noisepan/session
+    channels:
+      - "@devops_channel_1"
+      - "@devops_channel_2"
+      - "@devops_channel_3"
+
+  # Future sources (not yet implemented)
+  # rss:
+  #   feeds:
+  #     - https://example.com/feed.xml
+  # reddit:
+  #   subreddits:
+  #     - devops
+  #     - kubernetes
+
+storage:
+  path: .noisepan/noisepan.db
+  retain_days: 30
+
+digest:
+  timezone: "Europe/Luxembourg"
+  top_n: 7
+  include_skims: 5
+  since: 24h
+
+summarize:
+  mode: heuristic    # heuristic | llm
+  llm:
+    provider: openai
+    model: gpt-4.1-mini
+    api_key_env: OPENAI_API_KEY
+    max_tokens_per_post: 200
+
+privacy:
+  store_full_text: false
+  redact:
+    enabled: true
+    patterns:
+      - "(?i)token\\s*[:=]\\s*\\S+"
+      - "(?i)password\\s*[:=]\\s*\\S+"
+      - "(?i)api.?key\\s*[:=]\\s*\\S+"
