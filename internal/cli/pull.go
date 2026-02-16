@@ -67,6 +67,14 @@ func pullAction(_ *cobra.Command, _ []string) error {
 		sources = append(sources, rd)
 	}
 
+	if cfg.Sources.ForgePlan.Script != "" {
+		fp, err := source.NewForgePlan(cfg.Sources.ForgePlan.Script)
+		if err != nil {
+			return fmt.Errorf("create forgeplan source: %w", err)
+		}
+		sources = append(sources, fp)
+	}
+
 	totalInserted := 0
 	channels := make(map[string]bool)
 

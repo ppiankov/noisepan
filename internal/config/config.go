@@ -50,9 +50,14 @@ type Config struct {
 }
 
 type SourcesConfig struct {
-	Telegram TelegramConfig `yaml:"telegram"`
-	RSS      RSSConfig      `yaml:"rss"`
-	Reddit   RedditConfig   `yaml:"reddit"`
+	Telegram  TelegramConfig  `yaml:"telegram"`
+	RSS       RSSConfig       `yaml:"rss"`
+	Reddit    RedditConfig    `yaml:"reddit"`
+	ForgePlan ForgePlanConfig `yaml:"forgeplan"`
+}
+
+type ForgePlanConfig struct {
+	Script string `yaml:"script"`
 }
 
 type RSSConfig struct {
@@ -178,7 +183,8 @@ func validate(cfg *Config) error {
 	hasTelegram := len(cfg.Sources.Telegram.Channels) > 0
 	hasRSS := len(cfg.Sources.RSS.Feeds) > 0
 	hasReddit := len(cfg.Sources.Reddit.Subreddits) > 0
-	if !hasTelegram && !hasRSS && !hasReddit {
+	hasForgePlan := cfg.Sources.ForgePlan.Script != ""
+	if !hasTelegram && !hasRSS && !hasReddit && !hasForgePlan {
 		return errors.New("sources: at least one source must be configured")
 	}
 
