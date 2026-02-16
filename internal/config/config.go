@@ -51,6 +51,11 @@ type Config struct {
 
 type SourcesConfig struct {
 	Telegram TelegramConfig `yaml:"telegram"`
+	RSS      RSSConfig      `yaml:"rss"`
+}
+
+type RSSConfig struct {
+	Feeds []string `yaml:"feeds"`
 }
 
 type TelegramConfig struct {
@@ -165,8 +170,10 @@ func resolveEnv(cfg *Config) {
 }
 
 func validate(cfg *Config) error {
-	if len(cfg.Sources.Telegram.Channels) == 0 {
-		return errors.New("sources.telegram.channels: at least one channel is required")
+	hasTelegram := len(cfg.Sources.Telegram.Channels) > 0
+	hasRSS := len(cfg.Sources.RSS.Feeds) > 0
+	if !hasTelegram && !hasRSS {
+		return errors.New("sources: at least one source must be configured (telegram channels or rss feeds)")
 	}
 
 	if _, err := time.LoadLocation(cfg.Digest.Timezone); err != nil {
