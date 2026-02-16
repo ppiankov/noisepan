@@ -34,8 +34,12 @@ func doctorAction(_ *cobra.Command, _ []string) error {
 		printCheck(false, "config.yaml: %v", err)
 		ok = false
 	} else {
-		printCheck(true, "config.yaml (%d telegram channels, %d rss feeds, %d subreddits)",
-			len(cfg.Sources.Telegram.Channels), len(cfg.Sources.RSS.Feeds), len(cfg.Sources.Reddit.Subreddits))
+		fpScript := ""
+		if cfg.Sources.ForgePlan.Script != "" {
+			fpScript = ", forgeplan"
+		}
+		printCheck(true, "config.yaml (%d telegram channels, %d rss feeds, %d subreddits%s)",
+			len(cfg.Sources.Telegram.Channels), len(cfg.Sources.RSS.Feeds), len(cfg.Sources.Reddit.Subreddits), fpScript)
 	}
 
 	// Taste profile
@@ -74,6 +78,19 @@ func doctorAction(_ *cobra.Command, _ []string) error {
 		ok = false
 	} else {
 		printCheck(true, "telethon")
+	}
+
+	// Forge-plan script
+	if cfg != nil && cfg.Sources.ForgePlan.Script != "" {
+		if info, err := os.Stat(cfg.Sources.ForgePlan.Script); err != nil {
+			printCheck(false, "forge-plan script: %v", err)
+			ok = false
+		} else if info.IsDir() {
+			printCheck(false, "forge-plan script: %s is a directory", cfg.Sources.ForgePlan.Script)
+			ok = false
+		} else {
+			printCheck(true, "forge-plan script %s", cfg.Sources.ForgePlan.Script)
+		}
 	}
 
 	// Telegram session
