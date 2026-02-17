@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/ppiankov/noisepan/internal/config"
+	"github.com/ppiankov/noisepan/internal/privacy"
 	"github.com/ppiankov/noisepan/internal/source"
 	"github.com/ppiankov/noisepan/internal/store"
 	"github.com/spf13/cobra"
@@ -75,6 +77,15 @@ func pullAction(_ *cobra.Command, _ []string) error {
 		sources = append(sources, fp)
 	}
 
+	// Compile redact patterns if enabled
+	var redactPatterns []*regexp.Regexp
+	if cfg.Privacy.Redact.Enabled && len(cfg.Privacy.Redact.Patterns) > 0 {
+		redactPatterns, err = privacy.Compile(cfg.Privacy.Redact.Patterns)
+		if err != nil {
+			return fmt.Errorf("compile redact patterns: %w", err)
+		}
+	}
+
 	totalInserted := 0
 	channels := make(map[string]bool)
 
@@ -88,11 +99,29 @@ func pullAction(_ *cobra.Command, _ []string) error {
 		now := time.Now()
 		for _, p := range posts {
 			channels[p.Channel] = true
+
+			text := p.Text
+
+			// Apply redaction before snippet extraction
+			if len(redactPatterns) > 0 {
+				text = privacy.Apply(text, redactPatterns)
+			}
+
+			// Generate snippet from (possibly redacted) text, then
+			// clear full text if store_full_text is false.
+			snippet := ""
+			storeText := text
+			if !cfg.Privacy.StoreFullText {
+				snippet = firstNRunes(text, 200)
+				storeText = ""
+			}
+
 			_, err := db.InsertPost(ctx, store.PostInput{
 				Source:     p.Source,
 				Channel:    p.Channel,
 				ExternalID: p.ExternalID,
-				Text:       p.Text,
+				Text:       storeText,
+				Snippet:    snippet,
 				URL:        p.URL,
 				PostedAt:   p.PostedAt,
 				FetchedAt:  now,
@@ -124,4 +153,18 @@ func pullAction(_ *cobra.Command, _ []string) error {
 	fmt.Println()
 
 	return nil
+}
+
+func firstNRunes(s string, n int) string {
+	if n <= 0 || s == "" {
+		return ""
+	}
+	count := 0
+	for i := range s {
+		if count == n {
+			return s[:i]
+		}
+		count++
+	}
+	return s
 }
