@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 const (
 	rssSourceName   = "rss"
 	rssFetchTimeout = 30 * time.Second
+	rssUserAgent    = "Mozilla/5.0 (compatible; noisepan/1.0; +https://github.com/ppiankov/noisepan)"
 )
 
 var (
@@ -54,11 +56,25 @@ func (rs *RSSSource) Fetch(since time.Time) ([]Post, error) {
 	return posts, nil
 }
 
+// rssTransport injects a User-Agent header into every request.
+type rssTransport struct {
+	base http.RoundTripper
+}
+
+func (t *rssTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", rssUserAgent)
+	return t.base.RoundTrip(req)
+}
+
 func fetchFeed(feedURL string, since time.Time) ([]Post, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), rssFetchTimeout)
 	defer cancel()
 
 	fp := gofeed.NewParser()
+	fp.Client = &http.Client{
+		Timeout:   rssFetchTimeout,
+		Transport: &rssTransport{base: http.DefaultTransport},
+	}
 	feed, err := fp.ParseURLWithContext(feedURL, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", feedURL, err)
