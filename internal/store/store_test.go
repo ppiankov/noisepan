@@ -414,6 +414,88 @@ func TestDeduplicate_MultipleAlsoIn(t *testing.T) {
 	}
 }
 
+func TestPruneOld(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	old := now.AddDate(0, 0, -60) // 60 days ago
+	recent := now.Add(-1 * time.Hour)
+
+	// Insert old post with score
+	oldPost, err := st.InsertPost(ctx, PostInput{
+		Source:     "rss",
+		Channel:    "blog",
+		ExternalID: "old1",
+		Text:       "old post",
+		PostedAt:   old,
+		FetchedAt:  old.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert old post: %v", err)
+	}
+	if err := st.SaveScore(ctx, Score{
+		PostID:   oldPost.ID,
+		Score:    5,
+		Tier:     "skim",
+		ScoredAt: old.Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("save old score: %v", err)
+	}
+
+	// Insert recent post
+	_, err = st.InsertPost(ctx, PostInput{
+		Source:     "rss",
+		Channel:    "blog",
+		ExternalID: "new1",
+		Text:       "new post",
+		PostedAt:   recent,
+		FetchedAt:  recent.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert recent post: %v", err)
+	}
+
+	pruned, err := st.PruneOld(ctx, 30)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if pruned != 1 {
+		t.Errorf("pruned = %d, want 1", pruned)
+	}
+
+	// Verify only recent post remains
+	var count int
+	if err := st.db.QueryRow("SELECT COUNT(*) FROM posts").Scan(&count); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("posts remaining = %d, want 1", count)
+	}
+
+	// Verify old score was deleted
+	var scoreCount int
+	if err := st.db.QueryRow("SELECT COUNT(*) FROM scores").Scan(&scoreCount); err != nil {
+		t.Fatalf("count scores: %v", err)
+	}
+	if scoreCount != 0 {
+		t.Errorf("scores remaining = %d, want 0", scoreCount)
+	}
+}
+
+func TestPruneOld_ZeroDays(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	pruned, err := st.PruneOld(ctx, 0)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if pruned != 0 {
+		t.Errorf("pruned = %d, want 0", pruned)
+	}
+}
+
 func TestGetAlsoIn_Empty(t *testing.T) {
 	st, _ := openTestStore(t)
 	ctx := context.Background()

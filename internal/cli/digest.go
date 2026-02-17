@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/ppiankov/noisepan/internal/config"
@@ -158,6 +159,30 @@ func digestAction(_ *cobra.Command, _ []string) error {
 			items[i].AlsoIn = channels
 		}
 	}
+
+	// Apply digest limits (top_n for read_now, include_skims for skim)
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Score > items[j].Score
+	})
+	var limited []digest.DigestItem
+	readNowCount, skimCount := 0, 0
+	for _, item := range items {
+		switch item.Tier {
+		case taste.TierReadNow:
+			if readNowCount < cfg.Digest.TopN {
+				limited = append(limited, item)
+				readNowCount++
+			}
+		case taste.TierSkim:
+			if skimCount < cfg.Digest.IncludeSkims {
+				limited = append(limited, item)
+				skimCount++
+			}
+		default:
+			limited = append(limited, item)
+		}
+	}
+	items = limited
 
 	input := digest.DigestInput{
 		Items:      items,

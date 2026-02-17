@@ -109,9 +109,17 @@ func pullAction(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("deduplicate: %w", err)
 	}
 
+	pruned, err := db.PruneOld(ctx, cfg.Storage.RetainDays)
+	if err != nil {
+		return fmt.Errorf("prune old: %w", err)
+	}
+
 	fmt.Printf("Pulled %d posts from %d channels", totalInserted, len(channels))
 	if dupes > 0 {
 		fmt.Printf(" (%d duplicates removed)", dupes)
+	}
+	if pruned > 0 {
+		fmt.Printf(" (%d old posts pruned)", pruned)
 	}
 	fmt.Println()
 
