@@ -1,34 +1,36 @@
 [![CI](https://github.com/ppiankov/noisepan/actions/workflows/ci.yml/badge.svg)](https://github.com/ppiankov/noisepan/actions/workflows/ci.yml)
+[![Release](https://github.com/ppiankov/noisepan/actions/workflows/release.yml/badge.svg)](https://github.com/ppiankov/noisepan/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 # noisepan
 
-Extract signal from noisy information streams. Reads Telegram channels (and later RSS, Reddit, Medium), scores posts by relevance to your interests, and prints a concise digest in your terminal.
+Local-only signal extractor for noisy information streams. Telegram, RSS, Reddit sources. Deterministic keyword scoring, no ML. Terminal-first digest.
 
 ## Why This Exists
 
 You are not lazy. You are overloaded.
 
-The world produces more text than one brain can metabolize. Telegram channels, RSS feeds, Reddit threads, Medium posts — the signal-to-noise ratio is terrible and getting worse.
+The world produces more text than one brain can metabolize. Telegram channels, RSS feeds, Reddit threads — the signal-to-noise ratio is terrible and getting worse.
 
 Noisepan is a gold pan for information: pour the stream through it, heavy signal stays, sand washes away.
 
 ## What This Is
 
-- Reads posts from configured sources (Telegram channels first, more later)
+- Reads posts from Telegram channels, RSS/Atom feeds, and Reddit (via RSS)
 - Stores minimal metadata locally (SQLite, no cloud)
 - Scores each post against your taste profile (keyword weights, rules, labels)
 - Summarizes high-signal posts (heuristic or optional LLM)
 - Prints a ranked terminal digest: Read Now / Skim / Ignore
+- Outputs as terminal (ANSI), JSON, or Markdown
 - Explains why each post was ranked (`noisepan explain`)
 
 ## What This Is NOT
 
 - Not a Telegram client — does not send messages, does not join channels
 - Not a chatbot — no interactive mode, no AI conversation
+- Not ML/embedding-based — deterministic keyword + rule scoring
 - Not a SaaS — no accounts, no cloud, no tracking
 - Not a notification system — pull-based, runs when you run it
-- Not a content aggregator — filters and ranks, does not collect everything
 - Does not replace reading — reduces what you need to read
 
 ## Quick Start
@@ -36,60 +38,71 @@ Noisepan is a gold pan for information: pour the stream through it, heavy signal
 ### Install
 
 ```bash
-# Homebrew
 brew install ppiankov/tap/noisepan
-
-# Go install
-go install github.com/ppiankov/noisepan/cmd/noisepan@latest
 ```
 
 ### Configure
 
 ```bash
-noisepan init    # creates .noisepan/ dir with example configs
-# Edit .noisepan/config.yaml — add your Telegram channels
-# Edit .noisepan/taste.yaml — tune your signal/noise weights
+noisepan --config ~/.noisepan init
 ```
+
+Edit `~/.noisepan/config.yaml` — add your sources:
+
+```yaml
+sources:
+  rss:
+    feeds:
+      - "https://www.reddit.com/r/devops/.rss"
+      - "https://www.reddit.com/r/netsec/.rss"
+      - "https://www.reddit.com/r/kubernetes/.rss"
+  telegram:
+    api_id_env: TELEGRAM_API_ID
+    api_hash_env: TELEGRAM_API_HASH
+    session_dir: /Users/you/.noisepan/session
+    script: /Users/you/scripts/collector_telegram.py
+    python_path: /Users/you/.noisepan/venv/bin/python
+    channels:
+      - "@your_channel"
+```
+
+Edit `~/.noisepan/taste.yaml` — tune your signal/noise weights.
+
+See [docs/setup-guide.md](docs/setup-guide.md) for detailed setup instructions including Telegram authentication, venv setup, and shell configuration.
 
 ### Run
 
 ```bash
-# Pull new posts + generate digest
-noisepan run
-
-# Or step by step:
 noisepan pull              # fetch new posts from sources
 noisepan digest            # score + summarize + print
-noisepan digest --since 48h  # last 48 hours
-
-# Why was this ranked high?
-noisepan explain <post-id>
+noisepan run               # pull + digest in one step
+noisepan run --every 30m   # continuous mode
 ```
 
 ### Output
 
 ```
-noisepan — 3 channels, 147 posts, 24h window
+noisepan — 10 channels, 137 posts, since 1d
 
-🔥 Read Now (3)
-  1. K8s 1.36 removes dockershim shim-compat layer
-     → impacts legacy node bootstrap, migration guide linked
-     → score: 12  labels: [ops, breaking]
+--- Read Now (6) ---
 
-  2. Cert-manager CVE-2026-1182
-     → affects ECDSA issuer rotation, patch 1.16.3 available
-     → score: 10  labels: [critical, certs]
+  [14] [critical] cybersecurity — Infosec exec sold eight zero-day exploit kits to Russia: DoJ
+      https://www.reddit.com/r/cybersecurity/comments/.../
 
-  3. ArgoCD 3.4 drift detection rewrite
-     → fixes false positives in CRD-heavy clusters
-     → score: 8   labels: [ops]
+  [10] Kubernetes — Telescope - an open-source log viewer for ClickHouse, Docker and now Kubernetes
+      https://www.reddit.com/r/kubernetes/comments/.../
 
-📎 Skim (5)
-  4. New Linkerd stable release 2.17
-  5. Terraform provider for Vault updated
-  ...
+  [9] [critical, llm] netsec — Prompt Injection Standardization: Text Techniques vs Intent
+      https://www.reddit.com/r/netsec/comments/.../
 
-⏭ Ignored: 139 posts (noise suppressed)
+--- Skim (5) ---
+
+  [6] LocalLlama — SurrealDB 3.0 for agent memory
+      https://www.reddit.com/r/LocalLLaMA/comments/.../
+  [5] devops — What toolchain to use for alerts on logs?
+      https://www.reddit.com/r/devops/comments/.../
+
+Ignored: 117 posts (noise suppressed)
 ```
 
 ## Usage
@@ -108,24 +121,29 @@ noisepan — 3 channels, 147 posts, 24h window
 |------|---------|-------------|
 | `--config DIR` | `.noisepan/` | Config directory path |
 | `--since DUR` | `24h` | Time window for digest |
-| `--top N` | `7` | Max "Read Now" items |
-| `--format` | `terminal` | Output format: terminal, json, markdown |
-| `--taste FILE` | `.noisepan/taste.yaml` | Taste profile path |
+| `--format FMT` | `terminal` | Output: terminal, json, markdown |
+| `--source SRC` | all | Filter by source (rss, telegram) |
+| `--channel CH` | all | Filter by channel name |
+| `--no-color` | false | Disable ANSI colors |
+| `--every DUR` | off | Continuous mode interval (run command) |
 
 ## Architecture
 
 ```
-cmd/noisepan/main.go       -- CLI entry point (minimal)
+cmd/noisepan/main.go       -- CLI entry point
 internal/
   cli/                     -- Cobra commands (run, pull, digest, explain, init, doctor)
-  config/                  -- Config + taste profile loading
+  config/                  -- Config + taste profile loading (YAML)
   source/                  -- Source interface + implementations
-    telegram.go            -- Telegram channel reader
-    rss.go                 -- RSS/Atom feed reader (future)
-  store/                   -- SQLite storage for posts + scores
-  taste/                   -- Scoring engine: keywords, rules, labels
+    telegram.go            -- Telegram via Python/Telethon collector
+    rss.go                 -- RSS/Atom feeds (gofeed)
+    reddit.go              -- Reddit JSON API (deprecated, use RSS)
+    forgeplan.go           -- Local forge-plan script runner
+  store/                   -- SQLite storage (posts, scores, dedup, retention)
+  taste/                   -- Scoring engine: keywords, rules, labels, tiers
   summarize/               -- Heuristic + optional LLM summarizer
   digest/                  -- Terminal/JSON/Markdown formatters
+  privacy/                 -- PII redaction (regex patterns)
 ```
 
 ## Taste Profile
@@ -136,11 +154,29 @@ Your taste profile defines what is signal and what is noise:
 weights:
   high_signal:
     "cve": 5
-    "postmortem": 4
+    "zero-day": 5
     "kubernetes": 3
+    "llm": 3
+    "devsecops": 3
   low_signal:
     "webinar": -4
     "hiring": -3
+
+labels:
+  critical:
+    - "cve"
+    - "zero-day"
+  llm:
+    - "llm"
+    - "rag"
+    - "ai agent"
+
+rules:
+  - if:
+      contains_any: ["CVE-", "zero-day"]
+    then:
+      score_add: 5
+      labels: ["critical"]
 
 thresholds:
   read_now: 7    # score >= 7 → must read
@@ -148,37 +184,21 @@ thresholds:
   ignore: 0      # score < 3 → skip
 ```
 
-See `configs/taste.example.yaml` for a complete DevOps-oriented profile.
-
 ## Privacy
 
 - All data stored locally in SQLite (`.noisepan/noisepan.db`)
-- Full text storage is off by default — stores only snippets and hashes
-- Configurable PII redaction patterns strip tokens, passwords, API keys
+- Full text storage is off by default — stores only 200-char snippets
+- Configurable PII redaction patterns strip emails, tokens, API keys
 - LLM summarization is optional and off by default (heuristic mode)
 - No telemetry, no analytics, no cloud sync
 
 ## Known Limitations
 
-- Telegram is the only source (RSS, Reddit, Medium planned)
+- Telegram requires Python 3 + Telethon + one-time interactive login
+- Reddit JSON API returns 403 — use RSS feeds instead (`/r/sub/.rss`)
 - Heuristic summarizer is keyword-based (good enough for triage, not for deep understanding)
 - LLM summarizer requires external API key and sends post text to the provider
-- No daemon mode — runs once, exits (use cron/launchd for scheduling)
-- Telegram private channels require personal API credentials
-
-## Roadmap
-
-- [ ] Telegram source with Telethon collector
-- [ ] SQLite storage with deduplication
-- [ ] Taste scoring engine
-- [ ] Heuristic summarizer
-- [ ] Terminal digest formatter
-- [ ] `explain` command for scoring transparency
-- [ ] RSS/Atom source
-- [ ] LLM summarizer backend
-- [ ] Reddit source
-- [ ] Medium source
-- [ ] Markdown/JSON output formats
+- No daemon mode — use `--every` flag or cron/launchd for scheduling
 
 ## License
 
