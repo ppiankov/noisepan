@@ -39,9 +39,13 @@ func pullAction(_ *cobra.Command, _ []string) error {
 	var sources []source.Source
 
 	if len(cfg.Sources.Telegram.Channels) > 0 {
-		scriptPath := filepath.Join(configDir, "..", "scripts", "collector_telegram.py")
+		scriptPath := cfg.Sources.Telegram.Script
+		if scriptPath == "" {
+			scriptPath = filepath.Join(configDir, "..", "scripts", "collector_telegram.py")
+		}
 		tg, err := source.NewTelegram(
 			scriptPath,
+			cfg.Sources.Telegram.PythonPath,
 			cfg.Sources.Telegram.APIID,
 			cfg.Sources.Telegram.APIHash,
 			cfg.Sources.Telegram.SessionDir,
