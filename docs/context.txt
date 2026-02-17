@@ -9,7 +9,7 @@ Signal extractor for noisy information streams. Reads Telegram channels, RSS/Ato
 - No cloud, no accounts, no telemetry
 
 ## Current state
-All Phase 1 (N01-N07), Phase 2 (N08-N12), N13, and Phase 3 high-priority WOs (N14-N15) are implemented and pushed. The full pipeline works end-to-end: pull → score → summarize → digest.
+All Phase 1 (N01-N07), Phase 2 (N08-N12), N13, and Phase 3 WOs (N14-N16) are implemented and pushed. The full pipeline works end-to-end: pull → score → summarize → digest.
 
 ### Completed WOs
 - N01: SQLite storage layer (posts, scores, metadata, post_also_in)
@@ -27,6 +27,7 @@ All Phase 1 (N01-N07), Phase 2 (N08-N12), N13, and Phase 3 high-priority WOs (N1
 - N13: forge-plan local source (script runner, action parser)
 - N14: Data retention and digest limits (PruneOld, TopN/IncludeSkims)
 - N15: Privacy enforcement (redaction patterns, store_full_text toggle)
+- N16: Source and channel filtering (--source, --channel flags, dynamic query building)
 
 ## Architecture
 ```
@@ -67,12 +68,11 @@ make lint     # golangci-lint run ./...
 ```
 
 ## Pending WOs
-- N16: Source and channel filtering for digest (--source, --channel flags)
 - N17: Integration tests (full pipeline end-to-end)
 - N18: Watch mode (--every flag for continuous operation)
 
 ## Conventions
-- Go 1.25+, CGO enabled (SQLite)
+- Go 1.25+, pure Go SQLite (modernc.org/sqlite, no CGO)
 - LDFLAGS use VERSION_NUM (no v prefix)
 - Tests mandatory, -race flag, table-driven, httptest for HTTP mocking
 - No magic numbers, no decorative comments
