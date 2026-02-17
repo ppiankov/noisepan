@@ -504,3 +504,165 @@ No dependencies between Phase 2 WOs — all can be parallelized.
 
 Critical path for MVP: WO-N01 → WO-N02 → WO-N03 → WO-N04 → WO-N06 → WO-N07 (sequential, each builds on the previous).
 WO-N05 (heuristic summarizer) can be built in parallel with N04-N06.
+
+---
+
+### WO-N13: forge-plan local source
+
+**Status:** `[ ]` planned
+**Priority:** low — after Phase 1 ships
+**Depends on:** WO-N07
+
+### Summary
+
+Add a "local" source type that runs `forge-plan.sh` and ingests its output as posts. Each suggested action becomes a post scored by the taste engine. Allows `noisepan digest` to show repo status alongside external signals.
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/source/forgeplan.go` | New file: local source — runs forge-plan.sh, parses output into Posts |
+| `internal/source/forgeplan_test.go` | New file: tests with mock forge-plan output |
+
+### Acceptance criteria
+
+- [ ] Implements `Source` interface (`Name()` returns "forgeplan", `Fetch()` runs script)
+- [ ] Each suggested action becomes one Post with action description as text
+- [ ] Configurable script path in `config.yaml` (`sources.forgeplan.script`)
+- [ ] Graceful error if script not found or not executable
+- [ ] `make test && make lint` pass
+
+### Notes
+
+- forge-plan.sh lives at `/Users/pashah/dev/claude-skills/scripts/forge-plan.sh` — config should allow overriding path
+- Parse the "Suggested actions" section only, ignore headers
+- This is a local-only source — no network, no API keys
+
+---
+
+## Phase 3: Correctness and Usability
+
+### WO-N14: Honor digest limits and data retention
+
+**Status:** `[ ]` planned
+**Priority:** high — config promises behavior that isn't delivered
+
+### Summary
+
+Two config fields are loaded but never used: `storage.retain_days` (old posts never pruned) and `digest.top_n` / `digest.include_skims` (digest shows all posts regardless of limits). Wire both up.
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/store/store.go` | Add `PruneOld(ctx, retainDays) (int64, error)` — DELETE posts older than N days + their scores and also_in |
+| `internal/store/store_test.go` | Add tests for PruneOld |
+| `internal/cli/pull.go` | Call `db.PruneOld()` after `Deduplicate()` |
+| `internal/cli/digest.go` | Apply TopN and IncludeSkims limits before building DigestInput |
+
+### Acceptance criteria
+
+- [ ] `PruneOld` deletes posts (and associated scores/also_in) older than `retain_days`
+- [ ] `pull` calls PruneOld and reports count if > 0
+- [ ] Digest limits read_now to `top_n` items and skims to `include_skims` items (sorted by score desc)
+- [ ] Ignored posts are counted but never included in output (already works)
+- [ ] `make test && make lint` pass
+
+---
+
+### WO-N15: Privacy enforcement (redaction and full-text control)
+
+**Status:** `[ ]` planned
+**Priority:** high — config promises privacy features that aren't implemented
+
+### Summary
+
+`privacy.store_full_text: false` is ignored — full text is always stored. `privacy.redact.patterns` are loaded but never applied. Wire both up so privacy config actually controls behavior.
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/privacy/redact.go` | New file: `Apply(text string, patterns []string) string` — compile and apply regex replacements |
+| `internal/privacy/redact_test.go` | New file: tests for redaction |
+| `internal/cli/pull.go` | If `!cfg.Privacy.StoreFullText`, set `Text: ""` in PostInput; if redact enabled, apply patterns to text before insert |
+
+### Acceptance criteria
+
+- [ ] When `store_full_text: false`, posts are stored with empty Text (snippet still populated)
+- [ ] When `redact.enabled: true`, matching patterns are replaced with `[REDACTED]` in text before storage
+- [ ] Redaction applies before snippet extraction (so snippet is also redacted)
+- [ ] `make test && make lint` pass
+
+---
+
+### WO-N16: Source and channel filtering for digest
+
+**Status:** `[ ]` planned
+**Priority:** medium — usability improvement
+
+### Summary
+
+`GetPosts` only filters by time and tier. Add `--source` and `--channel` flags to `digest` so users can scope output.
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/store/store.go` | Extend `GetPosts` with optional source and channel filter params |
+| `internal/store/store_test.go` | Add filter tests |
+| `internal/cli/digest.go` | Add `--source` and `--channel` flags, pass to GetPosts |
+
+### Acceptance criteria
+
+- [ ] `noisepan digest --source rss` shows only RSS posts
+- [ ] `noisepan digest --channel devops` shows only posts from that channel
+- [ ] Flags can be combined
+- [ ] `make test && make lint` pass
+
+---
+
+### WO-N17: Integration tests
+
+**Status:** `[ ]` planned
+**Priority:** medium — confidence in the full pipeline
+
+### Summary
+
+Add end-to-end tests that exercise the full pull→score→digest pipeline with a temp database. Currently only unit tests exist per package.
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/cli/pipeline_test.go` | New file: integration test seeding a temp DB, running scoring, verifying digest output through all formatters |
+
+### Acceptance criteria
+
+- [ ] Test inserts posts, scores them, runs digest, verifies terminal/JSON/markdown output
+- [ ] Uses temp dir for DB and config — no external dependencies
+- [ ] `make test && make lint` pass
+
+---
+
+### WO-N18: Watch mode for continuous operation
+
+**Status:** `[ ]` planned
+**Priority:** low — nice to have for power users
+
+### Summary
+
+Add `--every <duration>` flag to `noisepan run` for continuous pull+digest on a timer. Graceful shutdown on SIGINT/SIGTERM.
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/cli/run.go` | Add `--every` flag, `time.Ticker` loop, signal handling |
+
+### Acceptance criteria
+
+- [ ] `noisepan run --every 30m` pulls and digests every 30 minutes
+- [ ] Graceful shutdown on Ctrl-C
+- [ ] First run is immediate, then waits for interval
+- [ ] `make test && make lint` pass
