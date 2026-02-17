@@ -1,7 +1,7 @@
 # noisepan — Project Context
 
 ## What it is
-Signal extractor for noisy information streams. Reads Telegram channels (and later RSS, Reddit, Medium), scores posts by keyword/rule-based taste profile, summarizes high-signal posts, prints terminal digest.
+Signal extractor for noisy information streams. Reads Telegram channels, RSS/Atom feeds, Reddit subreddits, and local forge-plan scripts. Scores posts by keyword/rule-based taste profile, summarizes high-signal posts, outputs digest in terminal/JSON/Markdown.
 
 ## What it is NOT
 - Not a Telegram client, chatbot, SaaS, or notification system
@@ -9,33 +9,54 @@ Signal extractor for noisy information streams. Reads Telegram channels (and lat
 - No cloud, no accounts, no telemetry
 
 ## Current state
-v0.0.0 — scaffolded. CLI skeleton with version command works. No functional commands yet.
+All Phase 1 (N01-N07), Phase 2 (N08-N12), N13, and Phase 3 high-priority WOs (N14-N15) are implemented and pushed. The full pipeline works end-to-end: pull → score → summarize → digest.
+
+### Completed WOs
+- N01: SQLite storage layer (posts, scores, metadata, post_also_in)
+- N02: Config and taste profile loading (YAML, env var resolution, defaults)
+- N03: Source interface + Telegram collector (Python/Telethon via JSONL)
+- N04: Taste scoring engine (keywords, rules, labels, tiers)
+- N05: Heuristic summarizer (sentence extraction, CVEs, URLs, versions)
+- N06: Terminal digest formatter (ANSI, tier grouping)
+- N07: CLI commands (init, pull, digest, run, doctor, explain)
+- N08: LLM summarizer backend (OpenAI-compatible, heuristic fallback)
+- N09: RSS/Atom source (gofeed, HTML stripping)
+- N10: Reddit source (public JSON API, rate limiting)
+- N11: JSON and Markdown output formats (--format flag)
+- N12: Cross-source post deduplication (content hash, also-in tracking)
+- N13: forge-plan local source (script runner, action parser)
+- N14: Data retention and digest limits (PruneOld, TopN/IncludeSkims)
+- N15: Privacy enforcement (redaction patterns, store_full_text toggle)
 
 ## Architecture
 ```
 cmd/noisepan/main.go       -- entry point
 internal/
-  cli/                     -- Cobra commands
+  cli/                     -- Cobra commands (init, pull, digest, run, doctor, explain)
   config/                  -- YAML config + taste profile
-  source/                  -- Source interface (telegram, rss, reddit)
-  store/                   -- SQLite storage
-  taste/                   -- Scoring engine
+  source/                  -- Source interface (telegram, rss, reddit, forgeplan)
+  store/                   -- SQLite storage (posts, scores, dedup, prune)
+  taste/                   -- Scoring engine (keywords, rules, tiers)
   summarize/               -- Heuristic + LLM summarizers
   digest/                  -- Terminal/JSON/Markdown formatters
+  privacy/                 -- Redaction (regex pattern replacement)
 ```
 
 ## Key design decisions
 - Hybrid Python+Go: Telegram collector is Python (Telethon) outputting JSONL, Go reads it
-- SQLite for storage (single file, no server)
+- SQLite for storage (single file, no server, modernc.org/sqlite)
 - Taste profile is YAML: keyword weights + rules + thresholds
-- Heuristic summarizer by default (no API needed), LLM optional
-- Pull-based only (cron for scheduling, no daemon)
+- Heuristic summarizer by default (no API needed), LLM optional for read_now posts
+- Pull-based only (cron for scheduling, no daemon yet)
 - Privacy-first: full text storage off by default, PII redaction patterns
+- Cross-source dedup via SHA-256 content hash with "also seen in" tracking
+- Digest limits: top_n for read_now, include_skims for skim tier
 
 ## Dependencies
 - github.com/spf13/cobra (CLI)
 - gopkg.in/yaml.v3 (config)
-- modernc.org/sqlite or mattn/go-sqlite3 (storage)
+- modernc.org/sqlite (storage, pure Go)
+- github.com/mmcdole/gofeed (RSS/Atom)
 - Python 3 + Telethon (Telegram collector)
 
 ## Build & verify
@@ -45,17 +66,17 @@ make test     # go test -race -cover ./...
 make lint     # golangci-lint run ./...
 ```
 
-## Pending WOs (Phase 1 — MVP)
-- WO-N01: SQLite storage layer
-- WO-N02: Config and taste profile loading
-- WO-N03: Source interface + Telegram collector
-- WO-N04: Taste scoring engine
-- WO-N05: Heuristic summarizer
-- WO-N06: Terminal digest formatter
-- WO-N07: CLI commands (pull, digest, run, init, doctor, explain)
+## Pending WOs
+- N16: Source and channel filtering for digest (--source, --channel flags)
+- N17: Integration tests (full pipeline end-to-end)
+- N18: Watch mode (--every flag for continuous operation)
 
 ## Conventions
-- Go 1.25+, standard project layout
+- Go 1.25+, CGO enabled (SQLite)
 - LDFLAGS use VERSION_NUM (no v prefix)
-- Tests mandatory, -race flag, table-driven
+- Tests mandatory, -race flag, table-driven, httptest for HTTP mocking
 - No magic numbers, no decorative comments
+- Conventional commits: `type: concise imperative statement`, no Co-Authored-By
+- Sources implement `source.Source`: `Name() string`, `Fetch(since time.Time) ([]Post, error)`
+- Formatters implement `digest.Formatter`: `Format(w io.Writer, input DigestInput) error`
+- Per-source errors are non-fatal in pull (warn and continue)
