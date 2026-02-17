@@ -84,6 +84,9 @@ func (f *TerminalFormatter) writeReadNowItem(w io.Writer, item DigestItem) {
 	for _, bullet := range item.Summary.Bullets[1:] {
 		fmt.Fprintf(w, "      %s\n", f.dim(bullet))
 	}
+	if item.Post.URL != "" {
+		fmt.Fprintf(w, "      %s\n", f.dim(item.Post.URL))
+	}
 	if len(item.AlsoIn) > 0 {
 		fmt.Fprintf(w, "      %s\n", f.dim("also in: "+strings.Join(item.AlsoIn, ", ")))
 	}
@@ -97,6 +100,9 @@ func (f *TerminalFormatter) writeSkimItem(w io.Writer, item DigestItem) {
 	}
 
 	fmt.Fprintf(w, "  [%d] %s — %s\n", item.Score, item.Post.Channel, firstBullet)
+	if item.Post.URL != "" {
+		fmt.Fprintf(w, "      %s\n", f.dim(item.Post.URL))
+	}
 	if len(item.AlsoIn) > 0 {
 		fmt.Fprintf(w, "      %s\n", f.dim("also in: "+strings.Join(item.AlsoIn, ", ")))
 	}
