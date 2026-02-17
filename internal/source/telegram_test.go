@@ -152,7 +152,7 @@ func TestParseJSONL_LargeMessage(t *testing.T) {
 }
 
 func TestNewTelegram_EmptyScriptPath(t *testing.T) {
-	_, err := NewTelegram("", "id", "hash", "session", []string{"ch"})
+	_, err := NewTelegram("", "", "id", "hash", "session", []string{"ch"})
 	if err == nil {
 		t.Fatal("expected error for empty script path")
 	}
@@ -162,7 +162,7 @@ func TestNewTelegram_EmptyScriptPath(t *testing.T) {
 }
 
 func TestNewTelegram_EmptyChannels(t *testing.T) {
-	_, err := NewTelegram("script.py", "id", "hash", "session", nil)
+	_, err := NewTelegram("script.py", "", "id", "hash", "session", nil)
 	if err == nil {
 		t.Fatal("expected error for empty channels")
 	}
@@ -172,7 +172,7 @@ func TestNewTelegram_EmptyChannels(t *testing.T) {
 }
 
 func TestTelegramSource_Name(t *testing.T) {
-	ts, err := NewTelegram("script.py", "id", "hash", "session", []string{"ch"})
+	ts, err := NewTelegram("script.py", "", "id", "hash", "session", []string{"ch"})
 	if err != nil {
 		t.Fatalf("new telegram: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestTelegramSource_Name(t *testing.T) {
 }
 
 func TestTelegramSource_FetchNonexistentScript(t *testing.T) {
-	ts, err := NewTelegram("/nonexistent/script.py", "id", "hash", "session", []string{"ch"})
+	ts, err := NewTelegram("/nonexistent/script.py", "", "id", "hash", "session", []string{"ch"})
 	if err != nil {
 		t.Fatalf("new telegram: %v", err)
 	}
