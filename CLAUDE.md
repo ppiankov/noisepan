@@ -23,7 +23,7 @@ make lint     # golangci-lint run ./...
 
 ## Conventions
 
-- Go 1.25+, CGO enabled (SQLite)
+- Go 1.25+, pure Go SQLite (modernc.org/sqlite, no CGO)
 - LDFLAGS: `-X .../internal/cli.Version=$(VERSION_NUM)` — VERSION_NUM has no `v` prefix
 - Sources implement `source.Source` interface: `Name() string`, `Fetch(since time.Time) ([]Post, error)`
 - Posts scored by `taste.Score(post, profile) ScoredPost`
