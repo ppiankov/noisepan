@@ -249,6 +249,100 @@ func TestGetPosts(t *testing.T) {
 	}
 }
 
+func TestGetPosts_FilterBySource(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 2, 16, 8, 0, 0, 0, time.UTC)
+
+	_, err := st.InsertPost(ctx, PostInput{
+		Source: "rss", Channel: "blog", ExternalID: "1",
+		Text: "rss post", PostedAt: base, FetchedAt: base.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	_, err = st.InsertPost(ctx, PostInput{
+		Source: "reddit", Channel: "devops", ExternalID: "2",
+		Text: "reddit post", PostedAt: base.Add(time.Hour), FetchedAt: base.Add(time.Hour + time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	posts, err := st.GetPosts(ctx, base.Add(-time.Minute), "", PostFilter{Source: "rss"})
+	if err != nil {
+		t.Fatalf("get posts: %v", err)
+	}
+	if len(posts) != 1 {
+		t.Fatalf("got %d posts, want 1", len(posts))
+	}
+	if posts[0].Post.Source != "rss" {
+		t.Errorf("source = %q, want rss", posts[0].Post.Source)
+	}
+}
+
+func TestGetPosts_FilterByChannel(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 2, 16, 8, 0, 0, 0, time.UTC)
+
+	_, err := st.InsertPost(ctx, PostInput{
+		Source: "rss", Channel: "blog", ExternalID: "1",
+		Text: "blog post", PostedAt: base, FetchedAt: base.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	_, err = st.InsertPost(ctx, PostInput{
+		Source: "rss", Channel: "news", ExternalID: "2",
+		Text: "news post", PostedAt: base.Add(time.Hour), FetchedAt: base.Add(time.Hour + time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	posts, err := st.GetPosts(ctx, base.Add(-time.Minute), "", PostFilter{Channel: "blog"})
+	if err != nil {
+		t.Fatalf("get posts: %v", err)
+	}
+	if len(posts) != 1 {
+		t.Fatalf("got %d posts, want 1", len(posts))
+	}
+	if posts[0].Post.Channel != "blog" {
+		t.Errorf("channel = %q, want blog", posts[0].Post.Channel)
+	}
+}
+
+func TestGetPosts_FilterCombined(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 2, 16, 8, 0, 0, 0, time.UTC)
+
+	for i, p := range []PostInput{
+		{Source: "rss", Channel: "blog", ExternalID: "1", Text: "rss blog", PostedAt: base, FetchedAt: base.Add(time.Minute)},
+		{Source: "rss", Channel: "news", ExternalID: "2", Text: "rss news", PostedAt: base.Add(time.Hour), FetchedAt: base.Add(time.Hour + time.Minute)},
+		{Source: "reddit", Channel: "blog", ExternalID: "3", Text: "reddit blog", PostedAt: base.Add(2 * time.Hour), FetchedAt: base.Add(2*time.Hour + time.Minute)},
+	} {
+		if _, err := st.InsertPost(ctx, p); err != nil {
+			t.Fatalf("insert %d: %v", i, err)
+		}
+	}
+
+	posts, err := st.GetPosts(ctx, base.Add(-time.Minute), "", PostFilter{Source: "rss", Channel: "blog"})
+	if err != nil {
+		t.Fatalf("get posts: %v", err)
+	}
+	if len(posts) != 1 {
+		t.Fatalf("got %d posts, want 1", len(posts))
+	}
+	if posts[0].Post.Source != "rss" || posts[0].Post.Channel != "blog" {
+		t.Errorf("got source=%q channel=%q, want rss/blog", posts[0].Post.Source, posts[0].Post.Channel)
+	}
+}
+
 func TestDeduplicate(t *testing.T) {
 	st, _ := openTestStore(t)
 	ctx := context.Background()
