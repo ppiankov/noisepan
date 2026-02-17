@@ -275,7 +275,13 @@ func (s *Store) SaveScore(ctx context.Context, in Score) error {
 	return nil
 }
 
-func (s *Store) GetPosts(ctx context.Context, since time.Time, tier string) ([]PostWithScore, error) {
+// PostFilter holds optional filters for GetPosts.
+type PostFilter struct {
+	Source  string // filter by source (e.g. "rss", "telegram")
+	Channel string // filter by channel name
+}
+
+func (s *Store) GetPosts(ctx context.Context, since time.Time, tier string, filters ...PostFilter) ([]PostWithScore, error) {
 	if s == nil || s.db == nil {
 		return nil, errors.New("store is not initialized")
 	}
@@ -285,30 +291,40 @@ func (s *Store) GetPosts(ctx context.Context, since time.Time, tier string) ([]P
 
 	sinceValue := formatTime(since)
 
-	var (
-		rows *sql.Rows
-		err  error
-	)
-
-	if tier == "" {
-		rows, err = s.db.QueryContext(ctx, `
-			SELECT p.id, p.source, p.channel, p.external_id, p.text, p.snippet, p.text_hash, p.url, p.posted_at, p.fetched_at,
-				s.score, s.labels, s.tier, s.scored_at, s.explanation
-			FROM posts p
-			LEFT JOIN scores s ON s.post_id = p.id
-			WHERE p.posted_at >= ?
-			ORDER BY p.posted_at DESC
-		`, sinceValue)
-	} else {
-		rows, err = s.db.QueryContext(ctx, `
-			SELECT p.id, p.source, p.channel, p.external_id, p.text, p.snippet, p.text_hash, p.url, p.posted_at, p.fetched_at,
-				s.score, s.labels, s.tier, s.scored_at, s.explanation
-			FROM posts p
-			JOIN scores s ON s.post_id = p.id
-			WHERE p.posted_at >= ? AND s.tier = ?
-			ORDER BY p.posted_at DESC
-		`, sinceValue, tier)
+	join := "LEFT JOIN"
+	if tier != "" {
+		join = "JOIN"
 	}
+
+	query := fmt.Sprintf(`
+		SELECT p.id, p.source, p.channel, p.external_id, p.text, p.snippet, p.text_hash, p.url, p.posted_at, p.fetched_at,
+			s.score, s.labels, s.tier, s.scored_at, s.explanation
+		FROM posts p
+		%s scores s ON s.post_id = p.id
+		WHERE p.posted_at >= ?`, join)
+	args := []any{sinceValue}
+
+	if tier != "" {
+		query += " AND s.tier = ?"
+		args = append(args, tier)
+	}
+
+	var filter PostFilter
+	if len(filters) > 0 {
+		filter = filters[0]
+	}
+	if filter.Source != "" {
+		query += " AND p.source = ?"
+		args = append(args, filter.Source)
+	}
+	if filter.Channel != "" {
+		query += " AND p.channel = ?"
+		args = append(args, filter.Channel)
+	}
+
+	query += " ORDER BY p.posted_at DESC"
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("get posts: %w", err)
 	}
