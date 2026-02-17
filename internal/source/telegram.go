@@ -22,6 +22,7 @@ const (
 // TelegramSource fetches messages from Telegram channels via a Python helper script.
 type TelegramSource struct {
 	scriptPath string
+	pythonPath string
 	apiID      string
 	apiHash    string
 	sessionDir string
@@ -29,17 +30,22 @@ type TelegramSource struct {
 }
 
 // NewTelegram creates a Telegram source. The scriptPath must point to the
-// collector_telegram.py script. API credentials and channels come from config.
-func NewTelegram(scriptPath, apiID, apiHash, sessionDir string, channels []string) (*TelegramSource, error) {
+// collector_telegram.py script. pythonPath is the Python interpreter to use
+// (defaults to "python3"). API credentials and channels come from config.
+func NewTelegram(scriptPath, pythonPath, apiID, apiHash, sessionDir string, channels []string) (*TelegramSource, error) {
 	if strings.TrimSpace(scriptPath) == "" {
 		return nil, errors.New("telegram: script path is required")
 	}
 	if len(channels) == 0 {
 		return nil, errors.New("telegram: at least one channel is required")
 	}
+	if pythonPath == "" {
+		pythonPath = "python3"
+	}
 
 	return &TelegramSource{
 		scriptPath: scriptPath,
+		pythonPath: pythonPath,
 		apiID:      apiID,
 		apiHash:    apiHash,
 		sessionDir: sessionDir,
@@ -66,7 +72,7 @@ func (ts *TelegramSource) Fetch(since time.Time) ([]Post, error) {
 		"--since", since.UTC().Format(time.RFC3339),
 	}
 
-	cmd := exec.CommandContext(ctx, "python3", args...)
+	cmd := exec.CommandContext(ctx, ts.pythonPath, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
