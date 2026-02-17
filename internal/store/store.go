@@ -423,6 +423,49 @@ func (s *Store) Deduplicate(ctx context.Context) (int, error) {
 	return deleted, nil
 }
 
+// PruneOld deletes posts older than retainDays and their associated scores.
+// post_also_in rows are cascade-deleted. Returns the number of posts removed.
+func (s *Store) PruneOld(ctx context.Context, retainDays int) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, errors.New("store is not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if retainDays <= 0 {
+		return 0, nil
+	}
+
+	cutoff := formatTime(time.Now().AddDate(0, 0, -retainDays))
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("begin prune transaction: %w", err)
+	}
+
+	// Delete scores for old posts (no CASCADE on scores FK)
+	if _, err := tx.ExecContext(ctx,
+		"DELETE FROM scores WHERE post_id IN (SELECT id FROM posts WHERE posted_at < ?)", cutoff,
+	); err != nil {
+		_ = tx.Rollback()
+		return 0, fmt.Errorf("prune old scores: %w", err)
+	}
+
+	// Delete old posts (post_also_in cascades)
+	res, err := tx.ExecContext(ctx, "DELETE FROM posts WHERE posted_at < ?", cutoff)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, fmt.Errorf("prune old posts: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit prune: %w", err)
+	}
+
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // GetAlsoIn returns "also seen in" channels for the given post IDs.
 // Returns a map of postID → ["source/channel", ...].
 func (s *Store) GetAlsoIn(ctx context.Context, postIDs []int64) (map[int64][]string, error) {
