@@ -73,6 +73,8 @@ type TelegramConfig struct {
 	APIHashEnv string   `yaml:"api_hash_env"`
 	SessionDir string   `yaml:"session_dir"`
 	Channels   []string `yaml:"channels"`
+	Script     string   `yaml:"script"`
+	PythonPath string   `yaml:"python_path"`
 
 	// Resolved from env vars at load time.
 	APIID   string `yaml:"-"`

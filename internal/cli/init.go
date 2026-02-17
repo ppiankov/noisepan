@@ -69,6 +69,10 @@ sources:
     api_id_env: TELEGRAM_API_ID
     api_hash_env: TELEGRAM_API_HASH
     session_dir: .noisepan/session
+    script: ""
+    # script: /path/to/collector_telegram.py
+    python_path: ""
+    # python_path: ~/.noisepan/venv/bin/python
     channels:
       - "@your_channel_here"
   rss:
