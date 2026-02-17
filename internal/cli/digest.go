@@ -19,9 +19,11 @@ import (
 )
 
 var (
-	digestSince  string
-	digestFormat string
-	noColor      bool
+	digestSince   string
+	digestFormat  string
+	digestSource  string
+	digestChannel string
+	noColor       bool
 )
 
 var digestCmd = &cobra.Command{
@@ -33,6 +35,8 @@ var digestCmd = &cobra.Command{
 func init() {
 	digestCmd.Flags().StringVar(&digestSince, "since", "", "time window (e.g. 48h)")
 	digestCmd.Flags().StringVar(&digestFormat, "format", "", "output format: terminal, json, markdown")
+	digestCmd.Flags().StringVar(&digestSource, "source", "", "filter by source (e.g. rss, telegram, reddit)")
+	digestCmd.Flags().StringVar(&digestChannel, "channel", "", "filter by channel name")
 	digestCmd.Flags().BoolVar(&noColor, "no-color", false, "disable ANSI colors")
 }
 
@@ -67,7 +71,8 @@ func digestAction(_ *cobra.Command, _ []string) error {
 	ctx := context.Background()
 
 	// Get all posts in window
-	posts, err := db.GetPosts(ctx, sinceTime, "")
+	filter := store.PostFilter{Source: digestSource, Channel: digestChannel}
+	posts, err := db.GetPosts(ctx, sinceTime, "", filter)
 	if err != nil {
 		return fmt.Errorf("get posts: %w", err)
 	}
