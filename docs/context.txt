@@ -1,7 +1,7 @@
 # noisepan — Project Context
 
 ## What it is
-Signal extractor for noisy information streams. Reads Telegram channels, RSS/Atom feeds, Reddit subreddits, and local forge-plan scripts. Scores posts by keyword/rule-based taste profile, summarizes high-signal posts, outputs digest in terminal/JSON/Markdown.
+Local-only signal extractor for noisy information streams. Telegram, RSS, Reddit sources. Deterministic keyword scoring, no ML. Terminal-first digest.
 
 ## What it is NOT
 - Not a Telegram client, chatbot, SaaS, or notification system
@@ -9,7 +9,7 @@ Signal extractor for noisy information streams. Reads Telegram channels, RSS/Ato
 - No cloud, no accounts, no telemetry
 
 ## Current state
-All Phase 1 (N01-N07), Phase 2 (N08-N12), N13, and Phase 3 WOs (N14-N16) are implemented and pushed. The full pipeline works end-to-end: pull → score → summarize → digest.
+All Phase 1 (N01-N07), Phase 2 (N08-N12), N13, and Phase 3 WOs (N14-N16) are implemented and pushed. The full pipeline works end-to-end: pull → score → summarize → digest. Project is released as v0.2.1 via Homebrew (`brew install ppiankov/tap/noisepan`).
 
 ### Completed WOs
 - N01: SQLite storage layer (posts, scores, metadata, post_also_in)
@@ -21,13 +21,23 @@ All Phase 1 (N01-N07), Phase 2 (N08-N12), N13, and Phase 3 WOs (N14-N16) are imp
 - N07: CLI commands (init, pull, digest, run, doctor, explain)
 - N08: LLM summarizer backend (OpenAI-compatible, heuristic fallback)
 - N09: RSS/Atom source (gofeed, HTML stripping)
-- N10: Reddit source (public JSON API, rate limiting)
+- N10: Reddit source (public JSON API — now dead, use RSS instead)
 - N11: JSON and Markdown output formats (--format flag)
 - N12: Cross-source post deduplication (content hash, also-in tracking)
 - N13: forge-plan local source (script runner, action parser)
 - N14: Data retention and digest limits (PruneOld, TopN/IncludeSkims)
 - N15: Privacy enforcement (redaction patterns, store_full_text toggle)
 - N16: Source and channel filtering (--source, --channel flags, dynamic query building)
+
+### Post-WO improvements
+- Release workflow (.github/workflows/release.yml) — tag-triggered, 4 platforms, auto-updates homebrew-tap
+- Formula template (Formula/noisepan.rb) + homebrew-tap integration
+- Configurable telegram script path and python_path (venv support)
+- Post URLs shown in terminal digest
+- Browser-like User-Agent on RSS fetcher (required for Reddit RSS)
+- Setup guide (docs/setup-guide.md) with fish/bash/zsh shell instructions
+- README rewritten with real output examples, accurate feature list
+- Repo description and topics updated on GitHub
 
 ## Architecture
 ```
@@ -45,13 +55,15 @@ internal/
 
 ## Key design decisions
 - Hybrid Python+Go: Telegram collector is Python (Telethon) outputting JSONL, Go reads it
-- SQLite for storage (single file, no server, modernc.org/sqlite)
+- SQLite for storage (single file, no server, modernc.org/sqlite, pure Go, no CGO)
 - Taste profile is YAML: keyword weights + rules + thresholds
 - Heuristic summarizer by default (no API needed), LLM optional for read_now posts
-- Pull-based only (cron for scheduling, no daemon yet)
+- Pull-based only (cron/launchd for scheduling, --every flag for watch mode)
 - Privacy-first: full text storage off by default, PII redaction patterns
 - Cross-source dedup via SHA-256 content hash with "also seen in" tracking
 - Digest limits: top_n for read_now, include_skims for skim tier
+- Reddit JSON API dead since Nov 2025 — use RSS feeds with browser UA instead
+- Telegram python_path and script configurable for venv support
 
 ## Dependencies
 - github.com/spf13/cobra (CLI)
@@ -67,9 +79,22 @@ make test     # go test -race -cover ./...
 make lint     # golangci-lint run ./...
 ```
 
+## Release
+```bash
+git tag v0.X.Y && git push origin v0.X.Y
+# Release workflow builds, creates GitHub release, updates homebrew-tap
+brew update && brew upgrade noisepan
+```
+
 ## Pending WOs
 - N17: Integration tests (full pipeline end-to-end)
 - N18: Watch mode (--every flag for continuous operation)
+
+## Known issues
+- Reddit JSON API returns 403 — must use RSS feeds instead
+- Telegram collector script not bundled with Homebrew — requires manual download
+- Telegram needs one-time interactive session setup before automated pulls work
+- go.mod had gofeed/yaml.v3 marked as indirect — fixed in 6090e17
 
 ## Conventions
 - Go 1.25+, pure Go SQLite (modernc.org/sqlite, no CGO)
