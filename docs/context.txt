@@ -89,6 +89,7 @@ brew update && brew upgrade noisepan
 ## Pending WOs
 - N17: Integration tests (full pipeline end-to-end)
 - N18: Watch mode (--every flag for continuous operation)
+- N19: Entropia verification for digest posts (verify command, runs entropia scan on read_now URLs)
 
 ## Known issues
 - Reddit JSON API returns 403 — must use RSS feeds instead
