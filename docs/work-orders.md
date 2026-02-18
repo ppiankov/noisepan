@@ -624,7 +624,7 @@ Two config fields are loaded but never used: `storage.retain_days` (old posts ne
 
 ### WO-N17: Integration tests
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** medium — confidence in the full pipeline
 
 ### Summary
@@ -639,15 +639,15 @@ Add end-to-end tests that exercise the full pull→score→digest pipeline with 
 
 ### Acceptance criteria
 
-- [ ] Test inserts posts, scores them, runs digest, verifies terminal/JSON/markdown output
-- [ ] Uses temp dir for DB and config — no external dependencies
-- [ ] `make test && make lint` pass
+- [x] Test inserts posts, scores them, runs digest, verifies terminal/JSON/markdown output
+- [x] Uses temp dir for DB and config — no external dependencies
+- [x] `make test && make lint` pass
 
 ---
 
 ### WO-N18: Watch mode for continuous operation
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** low — nice to have for power users
 
 ### Summary
@@ -662,10 +662,10 @@ Add `--every <duration>` flag to `noisepan run` for continuous pull+digest on a 
 
 ### Acceptance criteria
 
-- [ ] `noisepan run --every 30m` pulls and digests every 30 minutes
-- [ ] Graceful shutdown on Ctrl-C
-- [ ] First run is immediate, then waits for interval
-- [ ] `make test && make lint` pass
+- [x] `noisepan run --every 30m` pulls and digests every 30 minutes
+- [x] Graceful shutdown on Ctrl-C
+- [x] First run is immediate, then waits for interval
+- [x] `make test && make lint` pass
 
 ---
 

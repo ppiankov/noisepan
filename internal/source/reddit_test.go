@@ -2,8 +2,8 @@ package source
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -19,14 +19,37 @@ func makeListing(posts ...redditPost) redditListing {
 	}{Children: children}}
 }
 
-func redditServer(handler http.HandlerFunc) *httptest.Server {
-	return httptest.NewServer(handler)
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
-func redditWithServer(url string, subreddits []string) *RedditSource {
+func redditWithTransport(subreddits []string, rt roundTripFunc) *RedditSource {
 	rs, _ := NewReddit(subreddits)
-	rs.baseURL = url
+	rs.baseURL = "https://reddit.test"
+	rs.client = &http.Client{
+		Timeout:   redditTimeout,
+		Transport: rt,
+	}
 	return rs
+}
+
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal json: %v", err)
+	}
+	return string(b)
+}
+
+func response(status int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
 }
 
 func TestNewReddit_EmptySubreddits(t *testing.T) {
@@ -60,9 +83,15 @@ func TestRedditSource_Name(t *testing.T) {
 
 func TestReddit_SuccessfulFetch(t *testing.T) {
 	now := time.Now()
-	srv := redditServer(func(w http.ResponseWriter, r *http.Request) {
+	rs := redditWithTransport([]string{"devops"}, func(r *http.Request) (*http.Response, error) {
 		if r.Header.Get("User-Agent") != redditUserAgent {
 			t.Errorf("user-agent = %q, want %q", r.Header.Get("User-Agent"), redditUserAgent)
+		}
+		if r.URL.Path != "/r/devops/new.json" {
+			t.Errorf("path = %q, want /r/devops/new.json", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("limit"); got != "100" {
+			t.Errorf("limit query = %q, want 100", got)
 		}
 
 		listing := makeListing(
@@ -82,12 +111,9 @@ func TestReddit_SuccessfulFetch(t *testing.T) {
 				CreatedUTC: float64(now.Unix()),
 			},
 		)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(listing)
+		return response(http.StatusOK, mustJSON(t, listing)), nil
 	})
-	defer srv.Close()
 
-	rs := redditWithServer(srv.URL, []string{"devops"})
 	posts, err := rs.Fetch(now.Add(-1 * time.Hour))
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
@@ -125,18 +151,15 @@ func TestReddit_SinceFilter(t *testing.T) {
 	old := now.Add(-48 * time.Hour)
 	since := now.Add(-24 * time.Hour)
 
-	srv := redditServer(func(w http.ResponseWriter, _ *http.Request) {
+	rs := redditWithTransport([]string{"test"}, func(_ *http.Request) (*http.Response, error) {
 		listing := makeListing(
 			redditPost{ID: "new1", Title: "New", CreatedUTC: float64(now.Unix()), Permalink: "/r/test/new1"},
 			redditPost{ID: "old1", Title: "Old", CreatedUTC: float64(old.Unix()), Permalink: "/r/test/old1"},
 			redditPost{ID: "new2", Title: "Also New", CreatedUTC: float64(now.Add(-1 * time.Hour).Unix()), Permalink: "/r/test/new2"},
 		)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(listing)
+		return response(http.StatusOK, mustJSON(t, listing)), nil
 	})
-	defer srv.Close()
 
-	rs := redditWithServer(srv.URL, []string{"test"})
 	posts, err := rs.Fetch(since)
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
@@ -148,14 +171,11 @@ func TestReddit_SinceFilter(t *testing.T) {
 }
 
 func TestReddit_EmptyListing(t *testing.T) {
-	srv := redditServer(func(w http.ResponseWriter, _ *http.Request) {
+	rs := redditWithTransport([]string{"empty"}, func(_ *http.Request) (*http.Response, error) {
 		listing := makeListing()
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(listing)
+		return response(http.StatusOK, mustJSON(t, listing)), nil
 	})
-	defer srv.Close()
 
-	rs := redditWithServer(srv.URL, []string{"empty"})
 	posts, err := rs.Fetch(time.Now().Add(-24 * time.Hour))
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
@@ -166,12 +186,9 @@ func TestReddit_EmptyListing(t *testing.T) {
 }
 
 func TestReddit_APIError(t *testing.T) {
-	srv := redditServer(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusTooManyRequests)
+	rs := redditWithTransport([]string{"ratelimited"}, func(_ *http.Request) (*http.Response, error) {
+		return response(http.StatusTooManyRequests, ""), nil
 	})
-	defer srv.Close()
-
-	rs := redditWithServer(srv.URL, []string{"ratelimited"})
 	posts, err := rs.Fetch(time.Now().Add(-24 * time.Hour))
 	if err != nil {
 		t.Fatalf("fetch should not return error (non-fatal): %v", err)
@@ -182,13 +199,9 @@ func TestReddit_APIError(t *testing.T) {
 }
 
 func TestReddit_MalformedJSON(t *testing.T) {
-	srv := redditServer(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte("{{{not json"))
+	rs := redditWithTransport([]string{"broken"}, func(_ *http.Request) (*http.Response, error) {
+		return response(http.StatusOK, "{{{not json"), nil
 	})
-	defer srv.Close()
-
-	rs := redditWithServer(srv.URL, []string{"broken"})
 	posts, err := rs.Fetch(time.Now().Add(-24 * time.Hour))
 	if err != nil {
 		t.Fatalf("fetch should not return error (non-fatal): %v", err)
