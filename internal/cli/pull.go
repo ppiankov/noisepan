@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -20,7 +19,7 @@ var pullCmd = &cobra.Command{
 	RunE:  pullAction,
 }
 
-func pullAction(_ *cobra.Command, _ []string) error {
+func pullAction(cmd *cobra.Command, _ []string) error {
 	cfg, err := config.Load(configDir)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
@@ -33,7 +32,7 @@ func pullAction(_ *cobra.Command, _ []string) error {
 	defer func() { _ = db.Close() }()
 
 	since := time.Now().Add(-cfg.Digest.Since.Duration)
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	// Build sources
 	var sources []source.Source

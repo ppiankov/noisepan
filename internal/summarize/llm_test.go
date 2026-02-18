@@ -2,36 +2,50 @@ package summarize
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
 
-func mockServer(handler http.HandlerFunc) *httptest.Server {
-	return httptest.NewServer(handler)
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
-func llmWithServer(url string) *LLMSummarizer {
+func llmWithTransport(rt roundTripFunc) *LLMSummarizer {
 	fallback := &HeuristicSummarizer{}
 	s := NewLLM("test-key", "gpt-4", 200, fallback)
-	s.endpoint = url
+	s.endpoint = "https://llm.test/v1/chat/completions"
+	s.client = &http.Client{
+		Timeout:   httpTimeout,
+		Transport: rt,
+	}
 	return s
 }
 
-func respondJSON(w http.ResponseWriter, content string) {
+func responseJSON(content string) (*http.Response, error) {
 	resp := chatResponse{
 		Choices: []chatChoice{
 			{Message: chatMessage{Role: "assistant", Content: content}},
 		},
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	b, err := json.Marshal(resp)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(string(b))),
+	}, nil
 }
 
 func TestLLM_SuccessfulResponse(t *testing.T) {
-	srv := mockServer(func(w http.ResponseWriter, r *http.Request) {
+	s := llmWithTransport(func(r *http.Request) (*http.Response, error) {
 		// Verify request
 		if r.Header.Get("Authorization") != "Bearer test-key" {
 			t.Errorf("auth header = %q", r.Header.Get("Authorization"))
@@ -39,12 +53,9 @@ func TestLLM_SuccessfulResponse(t *testing.T) {
 		if r.Header.Get("Content-Type") != "application/json" {
 			t.Errorf("content-type = %q", r.Header.Get("Content-Type"))
 		}
-
-		respondJSON(w, "- Critical CVE found in libfoo\n- Patch available in v2.1.0\n- No workaround exists")
+		return responseJSON("- Critical CVE found in libfoo\n- Patch available in v2.1.0\n- No workaround exists")
 	})
-	defer srv.Close()
 
-	s := llmWithServer(srv.URL)
 	result := s.Summarize("CVE-2026-1234 found in libfoo. Patch in v2.1.0.")
 
 	if len(result.Bullets) != 3 {
@@ -61,12 +72,13 @@ func TestLLM_SuccessfulResponse(t *testing.T) {
 }
 
 func TestLLM_APIError(t *testing.T) {
-	srv := mockServer(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
+	s := llmWithTransport(func(_ *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Body:       io.NopCloser(strings.NewReader("")),
+		}, nil
 	})
-	defer srv.Close()
 
-	s := llmWithServer(srv.URL)
 	result := s.Summarize("some text about kubernetes")
 
 	// Should fall back to heuristic
@@ -76,13 +88,14 @@ func TestLLM_APIError(t *testing.T) {
 }
 
 func TestLLM_Timeout(t *testing.T) {
-	srv := mockServer(func(w http.ResponseWriter, _ *http.Request) {
-		time.Sleep(2 * time.Second)
-		respondJSON(w, "- too late")
+	s := llmWithTransport(func(req *http.Request) (*http.Response, error) {
+		select {
+		case <-time.After(2 * time.Second):
+			return responseJSON("- too late")
+		case <-req.Context().Done():
+			return nil, errors.New("context canceled")
+		}
 	})
-	defer srv.Close()
-
-	s := llmWithServer(srv.URL)
 	s.client.Timeout = 100 * time.Millisecond
 
 	result := s.Summarize("some text")
@@ -94,13 +107,17 @@ func TestLLM_Timeout(t *testing.T) {
 }
 
 func TestLLM_EmptyChoices(t *testing.T) {
-	srv := mockServer(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(chatResponse{Choices: []chatChoice{}})
+	s := llmWithTransport(func(_ *http.Request) (*http.Response, error) {
+		b, err := json.Marshal(chatResponse{Choices: []chatChoice{}})
+		if err != nil {
+			return nil, err
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(string(b))),
+		}, nil
 	})
-	defer srv.Close()
-
-	s := llmWithServer(srv.URL)
 	result := s.Summarize("some text")
 
 	// Should fall back to heuristic
@@ -110,13 +127,13 @@ func TestLLM_EmptyChoices(t *testing.T) {
 }
 
 func TestLLM_MalformedJSON(t *testing.T) {
-	srv := mockServer(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte("{{{not json"))
+	s := llmWithTransport(func(_ *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader("{{{not json")),
+		}, nil
 	})
-	defer srv.Close()
-
-	s := llmWithServer(srv.URL)
 	result := s.Summarize("some text")
 
 	// Should fall back to heuristic
