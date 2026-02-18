@@ -10,7 +10,7 @@ Status key: `[ ]` planned, `[~]` in progress, `[x]` done
 
 ### WO-N01: SQLite storage layer
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** high — everything depends on persistent storage
 
 ### Summary
@@ -77,7 +77,7 @@ CREATE TABLE metadata (
 
 ### WO-N02: Config and taste profile loading
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** high — all commands need config
 
 ### Summary
@@ -111,7 +111,7 @@ Load `config.yaml` and `taste.yaml` from the config directory (default `.noisepa
 
 ### WO-N03: Source interface and Telegram collector
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** high — first source, validates the pipeline
 
 ### Summary
@@ -182,7 +182,7 @@ type Source interface {
 
 ### WO-N04: Taste scoring engine
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** high — the core differentiator
 
 ### Summary
@@ -243,7 +243,7 @@ type ScoreContribution struct {
 
 ### WO-N05: Heuristic summarizer
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** medium — useful without LLM
 
 ### Summary
@@ -293,7 +293,7 @@ type Summarizer interface {
 
 ### WO-N06: Terminal digest formatter
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** high — the user-facing output
 
 ### Summary
@@ -321,7 +321,7 @@ Format scored and summarized posts into a terminal digest. Group by tier (Read N
 
 ### WO-N07: CLI commands (pull, digest, run, init, doctor)
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** high — wires everything together
 
 ### Summary
@@ -358,7 +358,7 @@ Implement all Cobra commands that compose the pipeline: `init` (create config di
 
 ### WO-N08: LLM summarizer backend
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** medium — enhances summaries for complex posts
 
 ### Summary
@@ -385,7 +385,7 @@ Add optional LLM-backed summarization for "Read Now" posts. Only called when `su
 
 ### WO-N09: RSS/Atom source
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** medium — second source type
 
 ### Summary
@@ -416,7 +416,7 @@ Add RSS/Atom feed reader as a source. Parse standard RSS 2.0 and Atom feeds, ext
 
 ### WO-N10: Reddit source
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** low — third source, nice to have
 
 ### Summary
@@ -442,7 +442,7 @@ Add Reddit as a source. Read posts from configured subreddits via Reddit's JSON 
 
 ### WO-N11: JSON and Markdown output formats
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** low — enables piping and sharing
 
 ### Summary
@@ -467,7 +467,7 @@ Add `--format json` and `--format markdown` output modes alongside the default t
 
 ### WO-N12: Post deduplication across sources
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** medium — prevents duplicate signal when same content appears in multiple channels
 
 ### Summary
@@ -509,7 +509,7 @@ WO-N05 (heuristic summarizer) can be built in parallel with N04-N06.
 
 ### WO-N13: forge-plan local source
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** low — after Phase 1 ships
 **Depends on:** WO-N07
 
@@ -544,7 +544,7 @@ Add a "local" source type that runs `forge-plan.sh` and ingests its output as po
 
 ### WO-N14: Honor digest limits and data retention
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** high — config promises behavior that isn't delivered
 
 ### Summary
@@ -572,7 +572,7 @@ Two config fields are loaded but never used: `storage.retain_days` (old posts ne
 
 ### WO-N15: Privacy enforcement (redaction and full-text control)
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** high — config promises privacy features that aren't implemented
 
 ### Summary
@@ -598,7 +598,7 @@ Two config fields are loaded but never used: `storage.retain_days` (old posts ne
 
 ### WO-N16: Source and channel filtering for digest
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** medium — usability improvement
 
 ### Summary
@@ -666,3 +666,72 @@ Add `--every <duration>` flag to `noisepan run` for continuous pull+digest on a 
 - [ ] Graceful shutdown on Ctrl-C
 - [ ] First run is immediate, then waits for interval
 - [ ] `make test && make lint` pass
+
+---
+
+## Phase 4: Signal Verification
+
+### WO-N19: Entropia verification for digest posts
+
+**Status:** `[ ]` planned
+**Priority:** medium — adds source credibility signal to high-value posts
+**Depends on:** WO-N07
+
+### Summary
+
+Add `noisepan verify` command that runs `entropia scan` on URLs from read_now posts and displays the support index alongside the digest. This lets users see whether high-signal posts are backed by authoritative sources or have evidence gaps.
+
+Entropia (`entropia scan <url> --json`) outputs a JSON report with a support index (0-100), confidence level, conflict flag, and evidence signals. The verify command shells out to the entropia binary, parses the JSON, and prints a verification summary for each read_now post.
+
+### Design
+
+`noisepan verify` reads scored posts from the DB (same query as digest), filters to read_now tier, extracts URLs, runs `entropia scan <url> --json` for each, and prints results inline.
+
+Output format:
+```
+noisepan verify — 6 read_now posts, 5 with URLs
+
+--- Verification ---
+
+  [14] cybersecurity — Infosec exec sold zero-day exploit kits
+      https://www.reddit.com/r/cybersecurity/comments/.../
+      entropia: support 72/100, confidence high, no conflict
+
+  [10] Kubernetes — Telescope open-source log viewer
+      https://www.reddit.com/r/kubernetes/comments/.../
+      entropia: support 45/100, confidence medium, ⚠ conflict detected
+
+  [9] netsec — Prompt Injection Standardization
+      https://www.reddit.com/r/netsec/comments/.../
+      entropia: skipped (reddit.com not scannable)
+```
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/cli/verify.go` | New file: verify command — reads read_now posts, runs entropia, prints results |
+| `internal/cli/verify_test.go` | New file: tests with mock entropia output |
+| `internal/cli/doctor.go` | Add entropia binary check (optional, warn if missing) |
+| `internal/cli/root.go` | Register verify subcommand |
+
+### Acceptance criteria
+
+- [ ] `noisepan verify` scans read_now post URLs with `entropia scan <url> --json`
+- [ ] Displays support index, confidence, conflict flag per post
+- [ ] Skips posts without URLs (with note)
+- [ ] Skips domains known to be unscannable (reddit.com, t.me) with reason
+- [ ] `noisepan doctor` warns if entropia binary not found in PATH
+- [ ] `--since` and `--config` flags work (same as digest)
+- [ ] Timeout per scan: 30s
+- [ ] Per-URL errors are non-fatal (warn and continue to next post)
+- [ ] `make test && make lint` pass
+
+### Notes
+
+- Entropia scan JSON structure: `{"url":"...","score":{"index":72,"confidence":"high","conflict":false,"signals":[...]}}`
+- Run scans sequentially — entropia is network-heavy, parallel scans would overwhelm sources
+- Skip posts without URLs (forgeplan actions, some telegram posts)
+- Skip known-unscannable domains: reddit.com (returns 403 to entropia), t.me (requires auth)
+- Consider caching entropia results in the DB to avoid re-scanning on repeated verify calls
+- Entropia binary is a separate install (`brew install ppiankov/tap/entropia` or `go install`)
