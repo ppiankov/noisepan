@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,7 +39,7 @@ func init() {
 	digestCmd.Flags().BoolVar(&noColor, "no-color", false, "disable ANSI colors")
 }
 
-func digestAction(_ *cobra.Command, _ []string) error {
+func digestAction(cmd *cobra.Command, _ []string) error {
 	cfg, err := config.Load(configDir)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
@@ -68,7 +67,7 @@ func digestAction(_ *cobra.Command, _ []string) error {
 	}
 	sinceTime := time.Now().Add(-sinceDur)
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	// Get all posts in window
 	filter := store.PostFilter{Source: digestSource, Channel: digestChannel}
