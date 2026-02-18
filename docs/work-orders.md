@@ -673,7 +673,7 @@ Add `--every <duration>` flag to `noisepan run` for continuous pull+digest on a 
 
 ### WO-N19: Entropia verification for digest posts
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** medium — adds source credibility signal to high-value posts
 **Depends on:** WO-N07
 
