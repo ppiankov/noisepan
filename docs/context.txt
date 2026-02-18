@@ -9,7 +9,7 @@ Local-only signal extractor for noisy information streams. Telegram, RSS, Reddit
 - No cloud, no accounts, no telemetry
 
 ## Current state
-All Phase 1 (N01-N07), Phase 2 (N08-N12), N13, and Phase 3 WOs (N14-N16) are implemented and pushed. The full pipeline works end-to-end: pull → score → summarize → digest. Project is released as v0.2.1 via Homebrew (`brew install ppiankov/tap/noisepan`).
+All work orders (N01-N19) are implemented and pushed. The full pipeline works end-to-end: pull → score → summarize → digest → verify. Project is released as v0.2.1 via Homebrew (`brew install ppiankov/tap/noisepan`). N17-N19 implemented via runforge batch run.
 
 ### Completed WOs
 - N01: SQLite storage layer (posts, scores, metadata, post_also_in)
@@ -87,9 +87,8 @@ brew update && brew upgrade noisepan
 ```
 
 ## Pending WOs
-- N17: Integration tests (full pipeline end-to-end)
-- N18: Watch mode (--every flag for continuous operation)
-- N19: Entropia verification for digest posts (verify command, runs entropia scan on read_now URLs)
+
+None — all work orders (N01-N19) are complete.
 
 ## Known issues
 - Reddit JSON API returns 403 — must use RSS feeds instead
