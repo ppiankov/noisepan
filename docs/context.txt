@@ -1,15 +1,16 @@
 # noisepan — Project Context
 
 ## What it is
-Local-only signal extractor for noisy information streams. Telegram, RSS, Reddit sources. Deterministic keyword scoring, no ML. Terminal-first digest.
+Local-only signal extractor for noisy information streams. Telegram, RSS sources. Deterministic keyword scoring, no ML. Terminal-first digest with entropia verification.
 
 ## What it is NOT
 - Not a Telegram client, chatbot, SaaS, or notification system
 - Not ML/embedding-based (deterministic keyword+rule scoring)
 - No cloud, no accounts, no telemetry
+- Not a devops/security tool — it's a general information filter that users configure for their topics
 
 ## Current state
-All work orders (N01-N19) are implemented and pushed. The full pipeline works end-to-end: pull → score → summarize → digest → verify. Project is released as v0.2.1 via Homebrew (`brew install ppiankov/tap/noisepan`). N17-N19 implemented via runforge batch run.
+All work orders (N01-N19) are implemented and pushed. The full pipeline works end-to-end: pull → score → summarize → digest → verify. Released as v0.2.2 via Homebrew (`brew install ppiankov/tap/noisepan`). N17-N19 implemented via runforge batch run.
 
 ### Completed WOs
 - N01: SQLite storage layer (posts, scores, metadata, post_also_in)
@@ -28,6 +29,9 @@ All work orders (N01-N19) are implemented and pushed. The full pipeline works en
 - N14: Data retention and digest limits (PruneOld, TopN/IncludeSkims)
 - N15: Privacy enforcement (redaction patterns, store_full_text toggle)
 - N16: Source and channel filtering (--source, --channel flags, dynamic query building)
+- N17: E2E pipeline integration tests
+- N18: Watch mode (--every flag, graceful shutdown)
+- N19: Entropia verify command (runs entropia scan on read_now post URLs)
 
 ### Post-WO improvements
 - Release workflow (.github/workflows/release.yml) — tag-triggered, 4 platforms, auto-updates homebrew-tap
@@ -36,16 +40,18 @@ All work orders (N01-N19) are implemented and pushed. The full pipeline works en
 - Post URLs shown in terminal digest
 - Browser-like User-Agent on RSS fetcher (required for Reddit RSS)
 - Setup guide (docs/setup-guide.md) with fish/bash/zsh shell instructions
-- README rewritten with real output examples, accurate feature list
-- Repo description and topics updated on GitHub
+- README with verify command, accurate flags table, entropia integration
+- GitHub topics: cli, golang, homebrew, rss, telegram, sqlite, terminal, digest, keyword-scoring, signal-extraction, information-filtering, signal-to-noise
+- 30+ authoritative RSS feeds configured (CISA, Krebs, Schneier, Project Zero, Kubernetes blog, CNCF, Cloudflare, Simon Willison, etc.)
+- Taste profile supports any language via user-configured keywords
 
 ## Architecture
 ```
 cmd/noisepan/main.go       -- entry point
 internal/
-  cli/                     -- Cobra commands (init, pull, digest, run, doctor, explain)
+  cli/                     -- Cobra commands (init, pull, digest, run, verify, doctor, explain)
   config/                  -- YAML config + taste profile
-  source/                  -- Source interface (telegram, rss, reddit, forgeplan)
+  source/                  -- Source interface (telegram, rss, forgeplan)
   store/                   -- SQLite storage (posts, scores, dedup, prune)
   taste/                   -- Scoring engine (keywords, rules, tiers)
   summarize/               -- Heuristic + LLM summarizers
@@ -56,14 +62,15 @@ internal/
 ## Key design decisions
 - Hybrid Python+Go: Telegram collector is Python (Telethon) outputting JSONL, Go reads it
 - SQLite for storage (single file, no server, modernc.org/sqlite, pure Go, no CGO)
-- Taste profile is YAML: keyword weights + rules + thresholds
-- Heuristic summarizer by default (no API needed), LLM optional for read_now posts
+- Taste profile is YAML: keyword weights + rules + thresholds (any language)
+- Heuristic summarizer by default (no API needed), LLM optional via config (summarize.mode: llm)
 - Pull-based only (cron/launchd for scheduling, --every flag for watch mode)
 - Privacy-first: full text storage off by default, PII redaction patterns
 - Cross-source dedup via SHA-256 content hash with "also seen in" tracking
 - Digest limits: top_n for read_now, include_skims for skim tier
 - Reddit JSON API dead since Nov 2025 — use RSS feeds with browser UA instead
 - Telegram python_path and script configurable for venv support
+- Entropia verify: shells out to entropia binary, skips unscannable domains (reddit.com, t.me)
 
 ## Dependencies
 - github.com/spf13/cobra (CLI)
@@ -71,6 +78,7 @@ internal/
 - modernc.org/sqlite (storage, pure Go)
 - github.com/mmcdole/gofeed (RSS/Atom)
 - Python 3 + Telethon (Telegram collector)
+- entropia (optional, for verify command)
 
 ## Build & verify
 ```bash
@@ -86,6 +94,11 @@ git tag v0.X.Y && git push origin v0.X.Y
 brew update && brew upgrade noisepan
 ```
 
+## Cross-project integration
+- **entropia**: `noisepan verify` runs `entropia scan` on read_now post URLs. Entropia E01-E08 all complete (lint fixes, LDFLAGS, CLAUDE.md, Go 1.25, test coverage, proxy support, Homebrew packaging). Entropia also has Homebrew formula now (release workflow + HOMEBREW_TAP_TOKEN set).
+- **runforge**: Used to batch-execute N17-N19 and entropia E01-E07. Task file: runforge-noisepan-entropia.json at parent dir.
+- **forgeaware**: WO executions via runforge generate metrics for forgeaware launch gate (needs ≥50 logged WOs).
+
 ## Pending WOs
 
 None — all work orders (N01-N19) are complete.
@@ -94,7 +107,7 @@ None — all work orders (N01-N19) are complete.
 - Reddit JSON API returns 403 — must use RSS feeds instead
 - Telegram collector script not bundled with Homebrew — requires manual download
 - Telegram needs one-time interactive session setup before automated pulls work
-- go.mod had gofeed/yaml.v3 marked as indirect — fixed in 6090e17
+- verify command skips reddit.com and t.me URLs — most useful with direct article feeds (blogs, advisories)
 
 ## Conventions
 - Go 1.25+, pure Go SQLite (modernc.org/sqlite, no CGO)
