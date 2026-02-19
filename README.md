@@ -82,29 +82,62 @@ noisepan run --every 30m   # continuous mode
 
 ### Output
 
+Digest ranks every post into tiers based on your taste profile:
+
 ```
-noisepan — 10 channels, 137 posts, since 1d
+noisepan — 28 channels, 191 posts, since 1d
 
---- Read Now (6) ---
+--- Read Now (8) ---
 
-  [14] [critical] cybersecurity — Infosec exec sold eight zero-day exploit kits to Russia: DoJ
-      https://www.reddit.com/r/cybersecurity/comments/.../
+  [10] [critical] CISA — CISA Adds Three Known Exploited Vulnerabilities
+      https://www.cisa.gov/news-events/alerts/...
 
-  [10] Kubernetes — Telescope - an open-source log viewer for ClickHouse, Docker and now Kubernetes
-      https://www.reddit.com/r/kubernetes/comments/.../
+  [9] Krebs on Security — Patch Tuesday: Microsoft Fixes 63 Flaws
+      https://krebsonsecurity.com/2026/...
 
-  [9] [critical, llm] netsec — Prompt Injection Standardization: Text Techniques vs Intent
-      https://www.reddit.com/r/netsec/comments/.../
+  [8] [ops] Kubernetes Blog — Kubernetes v1.33: In-Place Pod Resize Graduates to GA
+      https://kubernetes.io/blog/2026/...
 
 --- Skim (5) ---
 
-  [6] LocalLlama — SurrealDB 3.0 for agent memory
-      https://www.reddit.com/r/LocalLLaMA/comments/.../
-  [5] devops — What toolchain to use for alerts on logs?
-      https://www.reddit.com/r/devops/comments/.../
+  [5] Cloudflare Blog — How we built automated canary deployments
+      https://blog.cloudflare.com/...
+  [4] Simon Willison — Using LLMs for structured data extraction
+      https://simonwillison.net/2026/...
 
-Ignored: 117 posts (noise suppressed)
+Ignored: 164 posts (noise suppressed)
 ```
+
+### Verify
+
+High scores don't mean the source is credible. A post can match all your keywords and still have no evidence behind it. The `verify` command checks read_now posts against [entropia](https://github.com/ppiankov/entropia) — a separate tool that evaluates how well claims are supported by available sources:
+
+```bash
+brew install ppiankov/tap/entropia   # one-time setup
+noisepan verify
+```
+
+```
+noisepan verify — 8 read_now posts, checking URLs...
+
+--- Verification ---
+
+  [10] [critical] CISA — CISA Adds Three Known Exploited Vulnerabilities
+      https://www.cisa.gov/news-events/alerts/...
+      entropia: support 88/100, confidence high, no conflict
+
+  [9] Krebs on Security — Patch Tuesday: Microsoft Fixes 63 Flaws
+      https://krebsonsecurity.com/2026/...
+      entropia: support 72/100, confidence high, no conflict
+
+  [8] [ops] Kubernetes Blog — Kubernetes v1.33: In-Place Pod Resize Graduates to GA
+      https://kubernetes.io/blog/2026/...
+      entropia: support 45/100, confidence medium, ⚠ conflict detected
+```
+
+A high score with `⚠ conflict detected` means entropia found contradictory evidence — the post scored well against your keywords but the underlying claims may not hold up. This is the signal to read critically rather than trust the headline.
+
+Posts from domains that can't be scanned (reddit.com, t.me) are skipped with a reason. Verify works best with direct article feeds — blogs, advisories, vendor announcements — where entropia can actually fetch and evaluate the page.
 
 ## Usage
 
