@@ -19,9 +19,10 @@ Noisepan is a gold pan for information: pour the stream through it, heavy signal
 - Reads posts from Telegram channels, RSS/Atom feeds, and Reddit (via RSS)
 - Stores minimal metadata locally (SQLite, no cloud)
 - Scores each post against your taste profile (keyword weights, rules, labels)
-- Summarizes high-signal posts (heuristic or optional LLM)
+- Summarizes high-signal posts (heuristic by default, optional LLM via config)
 - Prints a ranked terminal digest: Read Now / Skim / Ignore
 - Outputs as terminal (ANSI), JSON, or Markdown
+- Verifies source credibility via [entropia](https://github.com/ppiankov/entropia) integration
 - Explains why each post was ranked (`noisepan explain`)
 
 ## What This Is NOT
@@ -113,31 +114,32 @@ Ignored: 117 posts (noise suppressed)
 | `noisepan pull` | Fetch new posts from configured sources |
 | `noisepan digest` | Score, summarize, and print terminal digest |
 | `noisepan run` | Pull + digest in one step |
+| `noisepan run --every 30m` | Continuous mode with graceful shutdown |
+| `noisepan verify` | Check source credibility of read_now posts via entropia |
 | `noisepan explain <id>` | Show scoring breakdown for a post |
 | `noisepan doctor` | Verify config, auth, and database health |
 | `noisepan version` | Print version info |
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--config DIR` | `.noisepan/` | Config directory path |
-| `--since DUR` | `24h` | Time window for digest |
-| `--format FMT` | `terminal` | Output: terminal, json, markdown |
-| `--source SRC` | all | Filter by source (rss, telegram) |
-| `--channel CH` | all | Filter by channel name |
-| `--no-color` | false | Disable ANSI colors |
-| `--every DUR` | off | Continuous mode interval (run command) |
+| Flag | Applies to | Default | Description |
+|------|-----------|---------|-------------|
+| `--config DIR` | all | `.noisepan/` | Config directory path |
+| `--since DUR` | digest, verify | `24h` | Time window |
+| `--format FMT` | digest | `terminal` | Output: terminal, json, markdown |
+| `--source SRC` | digest | all | Filter by source (rss, telegram) |
+| `--channel CH` | digest | all | Filter by channel name |
+| `--no-color` | digest, verify | false | Disable ANSI colors |
+| `--every DUR` | run | off | Continuous mode interval |
 
 ## Architecture
 
 ```
 cmd/noisepan/main.go       -- CLI entry point
 internal/
-  cli/                     -- Cobra commands (run, pull, digest, explain, init, doctor)
+  cli/                     -- Cobra commands (run, pull, digest, verify, explain, init, doctor)
   config/                  -- Config + taste profile loading (YAML)
   source/                  -- Source interface + implementations
     telegram.go            -- Telegram via Python/Telethon collector
     rss.go                 -- RSS/Atom feeds (gofeed)
-    reddit.go              -- Reddit JSON API (deprecated, use RSS)
     forgeplan.go           -- Local forge-plan script runner
   store/                   -- SQLite storage (posts, scores, dedup, retention)
   taste/                   -- Scoring engine: keywords, rules, labels, tiers
@@ -197,8 +199,8 @@ thresholds:
 - Telegram requires Python 3 + Telethon + one-time interactive login
 - Reddit JSON API returns 403 — use RSS feeds instead (`/r/sub/.rss`)
 - Heuristic summarizer is keyword-based (good enough for triage, not for deep understanding)
-- LLM summarizer requires external API key and sends post text to the provider
-- No daemon mode — use `--every` flag or cron/launchd for scheduling
+- LLM summarizer requires external API key and sends post text to the provider (set `summarize.mode: llm` in config)
+- `verify` command requires [entropia](https://github.com/ppiankov/entropia) installed separately
 
 ## License
 
