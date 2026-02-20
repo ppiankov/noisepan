@@ -3,4 +3,6 @@ dist/
 *.db
 .noisepan/
 *.session
-.claude/skills/
+
+# Claude Code
+.claude/
