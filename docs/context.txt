@@ -102,7 +102,12 @@ brew update && brew upgrade noisepan
 
 ## Pending WOs
 
-None — all work orders (N01-N19) are complete.
+Phase 5 — Intelligence and Usability (all planned, not yet started):
+- N20: Stats command — per-channel signal-to-noise ratios, scoring distribution, stale feed detection
+- N21: Feed health checks in doctor — stale feeds, all-ignored feeds, HTTP error tracking
+- N22: Trending detection — cross-source mention counting, 3+ sources = trending tag
+- N23: OPML feed import — `noisepan import feeds.opml` for bulk RSS onboarding
+- N24: Digest output routing — `--output file`, `--webhook URL` for file/webhook delivery
 
 ## Known issues
 - Reddit JSON API returns 403 — must use RSS feeds instead
