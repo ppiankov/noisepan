@@ -96,7 +96,7 @@ brew update && brew upgrade noisepan
 ```
 
 ## Cross-project integration
-- **entropia**: `noisepan verify` runs `entropia scan` on read_now post URLs. Entropia E01-E08 all complete (lint fixes, LDFLAGS, CLAUDE.md, Go 1.25, test coverage, proxy support, Homebrew packaging). Released as v0.2.0 via Homebrew. HOMEBREW_TAP_TOKEN set. Both entropia.rb and noisepan.rb confirmed in homebrew-tap.
+- **entropia**: `noisepan verify` runs `entropia scan` on read_now post URLs. Entropia E01-E08 all complete (lint fixes, LDFLAGS, CLAUDE.md, Go 1.25, test coverage, proxy support, Homebrew packaging). Released as v0.2.0 via Homebrew. HOMEBREW_TAP_TOKEN set. Both entropia.rb and noisepan.rb confirmed in homebrew-tap. CI fixed: golangci-lint pinned to v2.10.1 (action v7) for Go 1.25 compatibility.
 - **runforge**: Used to batch-execute N17-N19 and entropia E01-E07. Task file: runforge-noisepan-entropia.json at parent dir.
 - **forgeaware**: WO executions via runforge generate metrics for forgeaware launch gate (needs ≥50 logged WOs).
 
