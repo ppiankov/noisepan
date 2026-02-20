@@ -42,6 +42,16 @@ Noisepan is a gold pan for information: pour the stream through it, heavy signal
 brew install ppiankov/tap/noisepan
 ```
 
+### Agent Integration
+
+noisepan is designed to be used by autonomous agents without plugins or SDKs. Single binary, deterministic output, structured JSON, bounded jobs.
+
+Agents: read [`SKILL.md`](SKILL.md) for install, commands, JSON parsing patterns, and workflow examples.
+
+Key pattern for agents: `noisepan digest --format json` returns machine-parseable scored items.
+
+Cross-tool integration: `noisepan verify` calls [entropia](https://github.com/ppiankov/entropia) automatically on read_now posts. Install both tools and the verification pipeline works out of the box — no wiring needed.
+
 ### Configure
 
 ```bash
@@ -226,14 +236,6 @@ thresholds:
 - Configurable PII redaction patterns strip emails, tokens, API keys
 - LLM summarization is optional and off by default (heuristic mode)
 - No telemetry, no analytics, no cloud sync
-
-## Agent Integration
-
-noisepan is designed to be used by autonomous agents without plugins or SDKs. Single binary, deterministic output, structured JSON, bounded jobs.
-
-Agents: read [`SKILL.md`](SKILL.md) for install, commands, JSON parsing patterns, and workflow examples.
-
-Key pattern for agents: `noisepan digest --format json` returns machine-parseable scored items.
 
 ## Known Limitations
 
