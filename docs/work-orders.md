@@ -735,3 +735,260 @@ noisepan verify — 6 read_now posts, 5 with URLs
 - Skip known-unscannable domains: reddit.com (returns 403 to entropia), t.me (requires auth)
 - Consider caching entropia results in the DB to avoid re-scanning on repeated verify calls
 - Entropia binary is a separate install (`brew install ppiankov/tap/entropia` or `go install`)
+
+---
+
+## Phase 5: Intelligence and Usability
+
+### WO-N20: Stats command — feed and scoring analytics
+
+**Status:** `[ ]` planned
+**Priority:** high — the tool looking at itself, helps users tune their setup
+
+### Summary
+
+Add `noisepan stats` command that analyzes stored posts and scores to show per-source and per-channel signal-to-noise ratios, top-performing feeds, and scoring distribution. Helps users identify noisy feeds to drop and high-signal feeds to prioritize.
+
+### Design
+
+Query the posts and scores tables grouped by source and channel. Compute totals, tier distribution, and signal ratio (read_now + skim as % of total). Display as a ranked table.
+
+Output format:
+```
+noisepan stats — 30 days, 4217 posts from 28 channels
+
+--- Signal-to-Noise by Channel ---
+
+  Channel                     Posts   Read Now   Skim   Ignored   Signal
+  CISA advisories               47       31       12        4      91%
+  Krebs on Security             38       18       14        6      84%
+  Kubernetes Blog               22        8       10        4      82%
+  r/cybersecurity              412       24       53      335      19%
+  r/LocalLLaMA                 389        8       31      350       10%
+
+--- Scoring Distribution ---
+
+  Read Now:    142  (3.4%)
+  Skim:        389  (9.2%)
+  Ignored:    3686  (87.4%)
+
+--- Stale Channels (no posts in 7+ days) ---
+
+  Tigera Blog — last post 2026-02-03
+```
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/store/store.go` | Add `GetStats(ctx, since) (StatsResult, error)` — aggregate query by source/channel with tier counts |
+| `internal/store/store_test.go` | Add stats query tests |
+| `internal/cli/stats.go` | New file: stats command, formats and prints analytics table |
+| `internal/cli/stats_test.go` | New file: tests for stats output |
+| `internal/cli/root.go` | Register statsCmd |
+
+### Acceptance criteria
+
+- [ ] `noisepan stats` shows per-channel signal-to-noise ratio ranked by signal %
+- [ ] Shows overall scoring distribution (read_now / skim / ignored counts and %)
+- [ ] Shows stale channels (no posts in 7+ days)
+- [ ] `--since` flag controls time window (default: 30d)
+- [ ] `make test && make lint` pass
+
+### Notes
+
+- Signal ratio = (read_now + skim) / total * 100
+- Stale detection: compare latest `posted_at` per channel against current time
+- This is a read-only analytics query — no mutations
+- Consider adding `--format json` support for piping to other tools
+
+---
+
+### WO-N21: Feed health checks in doctor
+
+**Status:** `[ ]` planned
+**Priority:** medium — practical early warning for broken feeds
+
+### Summary
+
+Extend `noisepan doctor` to check feed health: detect stale feeds (no posts in 7+ days), feeds that always score as ignored (wrong feed for taste profile), and feeds that return HTTP errors. Currently doctor only checks config and DB.
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/cli/doctor.go` | Add feed health checks: stale detection, error-rate check, all-ignored check |
+| `internal/store/store.go` | Add `GetChannelLastSeen(ctx) (map[string]time.Time, error)` — latest posted_at per channel |
+| `internal/store/store_test.go` | Add tests for GetChannelLastSeen |
+
+### Acceptance criteria
+
+- [ ] Doctor warns about channels with no posts in 7+ days ("stale: last seen N days ago")
+- [ ] Doctor warns about channels where 100% of posts scored as ignored ("all noise: consider removing or adjusting taste profile")
+- [ ] Doctor warns are non-fatal (info-level, don't fail the check)
+- [ ] Requires at least one completed pull to have data (skip checks if DB is empty)
+- [ ] `make test && make lint` pass
+
+### Notes
+
+- Only check feeds that are still in the current config (don't warn about removed feeds)
+- Stale threshold should be configurable in the future but hardcode 7 days for now
+- This reuses the stats query infrastructure from N20 if implemented first
+
+---
+
+### WO-N22: Trending detection — cross-source mention counting
+
+**Status:** `[ ]` planned
+**Priority:** medium — surfaces breaking stories that appear across multiple feeds
+**Depends on:** WO-N20
+
+### Summary
+
+When the same topic appears in multiple feeds within a time window, that's a stronger signal than any individual post score. Add mention counting to the digest: if a keyword or URL appears in N+ sources, annotate it as trending.
+
+### Design
+
+After scoring, scan read_now and skim posts for overlapping keywords or shared URLs. Group posts that share high-signal keywords (from the taste profile) appearing in 3+ different channels within the digest window. Display a trending section at the top of the digest.
+
+Output format:
+```
+--- Trending (appeared in 3+ sources) ---
+
+  "CVE-2026-1234" — mentioned in 5 channels
+    CISA, Krebs on Security, BleepingComputer, r/netsec, r/cybersecurity
+
+  "Kubernetes v1.33" — mentioned in 3 channels
+    Kubernetes Blog, CNCF, r/kubernetes
+```
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/taste/trending.go` | New file: `FindTrending(posts []ScoredPost, profile Profile, minSources int) []Trend` |
+| `internal/taste/trending_test.go` | New file: tests for trending detection |
+| `internal/digest/terminal.go` | Add trending section before Read Now |
+| `internal/digest/json.go` | Add trending to JSON output |
+| `internal/digest/markdown.go` | Add trending to Markdown output |
+| `internal/digest/digest.go` | Add `Trending []Trend` to DigestInput |
+| `internal/cli/digest.go` | Call FindTrending, pass to formatter |
+
+### Acceptance criteria
+
+- [ ] Detects high-signal keywords appearing in 3+ different channels
+- [ ] Trending section appears at the top of digest output (all formats)
+- [ ] Only considers keywords from the taste profile (not arbitrary words)
+- [ ] Deduplicates: if CVE-2026-1234 matches both "cve" and a rule, count once
+- [ ] `minSources` default is 3
+- [ ] `make test && make lint` pass
+
+### Notes
+
+- Start simple: match taste profile keywords across channels, group by keyword
+- Do NOT use fuzzy matching or NLP — keep it deterministic
+- Shared URLs are a strong grouping signal (same link posted in multiple channels)
+- Consider the dedup table (post_also_in) as an additional signal
+
+---
+
+### WO-N23: OPML feed import
+
+**Status:** `[ ]` planned
+**Priority:** low — onboarding convenience
+
+### Summary
+
+Add `noisepan import <file.opml>` command that reads an OPML file (standard RSS reader export format) and adds the feeds to `config.yaml`. Saves users from manually editing YAML when migrating from another RSS reader.
+
+### OPML format
+
+```xml
+<opml version="2.0">
+  <body>
+    <outline text="Tech" title="Tech">
+      <outline type="rss" text="Krebs" xmlUrl="https://krebsonsecurity.com/feed/" />
+      <outline type="rss" text="CISA" xmlUrl="https://www.cisa.gov/cybersecurity-advisories/all.xml" />
+    </outline>
+  </body>
+</opml>
+```
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/cli/import.go` | New file: import command — parse OPML XML, extract feed URLs, merge into config.yaml |
+| `internal/cli/import_test.go` | New file: tests with sample OPML |
+| `internal/cli/root.go` | Register importCmd |
+
+### Acceptance criteria
+
+- [ ] `noisepan import feeds.opml` reads OPML and adds new feed URLs to config.yaml
+- [ ] Skips feeds already present in config (no duplicates)
+- [ ] Reports: "Added N feeds, skipped M duplicates"
+- [ ] Handles nested OPML outlines (folders)
+- [ ] Preserves existing config.yaml content (only appends to rss.feeds list)
+- [ ] Validates that added URLs look like feed URLs (http/https)
+- [ ] `make test && make lint` pass
+
+### Notes
+
+- Use `encoding/xml` from stdlib — no external dependency needed
+- OPML is simple: iterate `<outline>` elements, extract `xmlUrl` attribute
+- Write back to config.yaml using yaml.v3 Marshal — must preserve existing structure
+- Consider `--dry-run` flag that shows what would be added without modifying config
+
+---
+
+### WO-N24: Digest output routing (file and webhook)
+
+**Status:** `[ ]` planned
+**Priority:** low — enables automated delivery without external scripting
+
+### Summary
+
+Add `--output` flag to write digest to a file, and `--webhook` flag to POST digest JSON to a URL. This lets users route digests to Slack, Discord, email pipelines, or local files without shell redirection or wrapper scripts.
+
+### Design
+
+`--output path` writes the formatted digest to a file instead of stdout. `--webhook url` POSTs the JSON-formatted digest to the given URL (always uses JSON format for webhooks regardless of `--format` flag).
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/cli/digest.go` | Add `--output` flag: write to file instead of stdout |
+| `internal/cli/digest.go` | Add `--webhook` flag: POST JSON digest to URL |
+| `internal/cli/run.go` | Inherit `--output` and `--webhook` flags |
+
+### Acceptance criteria
+
+- [ ] `noisepan digest --output ~/digest.md --format markdown` writes to file
+- [ ] `noisepan digest --webhook https://hooks.slack.com/...` POSTs JSON to URL
+- [ ] Webhook always sends JSON regardless of `--format`
+- [ ] Webhook includes `Content-Type: application/json` header
+- [ ] Webhook timeout: 10s, non-fatal on failure (warn and continue)
+- [ ] `--output` and `--webhook` can be combined (write file AND post)
+- [ ] `--output` creates parent directories if needed
+- [ ] `make test && make lint` pass
+
+### Notes
+
+- Webhook payload is the same JSON structure as `--format json` output
+- For Slack, users will need a Slack incoming webhook URL — document in setup guide
+- Keep it simple: plain HTTP POST, no retry, no queue
+- `--output -` means stdout (default behavior, for explicitness)
+
+---
+
+## Execution Order (Phase 5)
+
+```
+WO-N20 (stats) ──────→ WO-N22 (trending) — trending reuses stats infrastructure
+WO-N21 (doctor feeds) → standalone, can reuse N20 queries
+WO-N23 (OPML import) ─→ standalone
+WO-N24 (output routing) → standalone
+```
+
+N20 is the highest-leverage starting point — it informs all other improvements.
