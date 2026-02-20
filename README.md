@@ -227,6 +227,14 @@ thresholds:
 - LLM summarization is optional and off by default (heuristic mode)
 - No telemetry, no analytics, no cloud sync
 
+## Agent Integration
+
+noisepan is designed to be used by autonomous agents without plugins or SDKs. Single binary, deterministic output, structured JSON, bounded jobs.
+
+Agents: read [`SKILL.md`](SKILL.md) for install, commands, JSON parsing patterns, and workflow examples.
+
+Key pattern for agents: `noisepan digest --format json` returns machine-parseable scored items.
+
 ## Known Limitations
 
 - Telegram requires Python 3 + Telethon + one-time interactive login
