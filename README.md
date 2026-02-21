@@ -22,7 +22,11 @@ Noisepan is a gold pan for information: pour the stream through it, heavy signal
 - Summarizes high-signal posts (heuristic by default, optional LLM via config)
 - Prints a ranked terminal digest: Read Now / Skim / Ignore
 - Outputs as terminal (ANSI), JSON, or Markdown
+- Detects trending topics across channels (keyword appears in 3+ sources)
 - Verifies source credibility via [entropia](https://github.com/ppiankov/entropia) integration
+- Shows feed analytics and signal-to-noise ratios (`noisepan stats`)
+- Imports feeds from OPML files (`noisepan import`)
+- Routes digest to files or webhooks (`--output`, `--webhook`)
 - Explains why each post was ranked (`noisepan explain`)
 
 ## What This Is NOT
@@ -97,6 +101,11 @@ Digest ranks every post into tiers based on your taste profile:
 ```
 noisepan — 28 channels, 191 posts, since 1d
 
+--- Trending (appeared in 3+ sources) ---
+
+  "CVE-2026-1234" — mentioned in 5 channels
+    CISA, Krebs on Security, BleepingComputer, r/netsec, r/cybersecurity
+
 --- Read Now (8) ---
 
   [10] [critical] CISA — CISA Adds Three Known Exploited Vulnerabilities
@@ -158,36 +167,41 @@ Posts from domains that can't be scanned (reddit.com, t.me) are skipped with a r
 | `noisepan digest` | Score, summarize, and print terminal digest |
 | `noisepan run` | Pull + digest in one step |
 | `noisepan run --every 30m` | Continuous mode with graceful shutdown |
+| `noisepan stats` | Show per-channel signal-to-noise ratios and scoring analytics |
 | `noisepan verify` | Check source credibility of read_now posts via entropia |
+| `noisepan import <file.opml>` | Import RSS feeds from OPML file into config |
 | `noisepan explain <id>` | Show scoring breakdown for a post |
-| `noisepan doctor` | Verify config, auth, and database health |
+| `noisepan doctor` | Verify config, auth, database health, and feed health |
 | `noisepan version` | Print version info |
 
 | Flag | Applies to | Default | Description |
 |------|-----------|---------|-------------|
 | `--config DIR` | all | `.noisepan/` | Config directory path |
-| `--since DUR` | digest, verify | `24h` | Time window |
+| `--since DUR` | digest, stats, verify | `24h` / `30d` | Time window |
 | `--format FMT` | digest | `terminal` | Output: terminal, json, markdown |
 | `--source SRC` | digest | all | Filter by source (rss, telegram) |
 | `--channel CH` | digest | all | Filter by channel name |
 | `--no-color` | digest, verify | false | Disable ANSI colors |
 | `--every DUR` | run | off | Continuous mode interval |
+| `--output PATH` | digest, run | stdout | Write digest to file |
+| `--webhook URL` | digest, run | off | POST digest JSON to URL |
+| `--dry-run` | import | false | Show what would be added |
 
 ## Architecture
 
 ```
 cmd/noisepan/main.go       -- CLI entry point
 internal/
-  cli/                     -- Cobra commands (run, pull, digest, verify, explain, init, doctor)
+  cli/                     -- Cobra commands (run, pull, digest, verify, stats, import, explain, init, doctor)
   config/                  -- Config + taste profile loading (YAML)
   source/                  -- Source interface + implementations
     telegram.go            -- Telegram via Python/Telethon collector
     rss.go                 -- RSS/Atom feeds (gofeed)
     forgeplan.go           -- Local forge-plan script runner
-  store/                   -- SQLite storage (posts, scores, dedup, retention)
-  taste/                   -- Scoring engine: keywords, rules, labels, tiers
+  store/                   -- SQLite storage (posts, scores, dedup, retention, channel stats)
+  taste/                   -- Scoring engine: keywords, rules, labels, tiers, trending
   summarize/               -- Heuristic + optional LLM summarizer
-  digest/                  -- Terminal/JSON/Markdown formatters
+  digest/                  -- Terminal/JSON/Markdown formatters (with trending section)
   privacy/                 -- PII redaction (regex patterns)
 ```
 
