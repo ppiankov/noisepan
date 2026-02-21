@@ -168,6 +168,8 @@ Posts from domains that can't be scanned (reddit.com, t.me) are skipped with a r
 | `noisepan run` | Pull + digest in one step |
 | `noisepan run --every 30m` | Continuous mode with graceful shutdown |
 | `noisepan stats` | Show per-channel signal-to-noise ratios and scoring analytics |
+| `noisepan stats --format json` | Machine-readable stats for scripted monitoring |
+| `noisepan rescore` | Recompute all scores with current taste profile |
 | `noisepan verify` | Check source credibility of read_now posts via entropia |
 | `noisepan import <file.opml>` | Import RSS feeds from OPML file into config |
 | `noisepan explain <id>` | Show scoring breakdown for a post |
@@ -178,7 +180,7 @@ Posts from domains that can't be scanned (reddit.com, t.me) are skipped with a r
 |------|-----------|---------|-------------|
 | `--config DIR` | all | `.noisepan/` | Config directory path |
 | `--since DUR` | digest, stats, verify | `24h` / `30d` | Time window |
-| `--format FMT` | digest | `terminal` | Output: terminal, json, markdown |
+| `--format FMT` | digest, stats | `terminal` | Output: terminal, json (stats: terminal, json) |
 | `--source SRC` | digest | all | Filter by source (rss, telegram) |
 | `--channel CH` | digest | all | Filter by channel name |
 | `--no-color` | digest, verify | false | Disable ANSI colors |
