@@ -482,6 +482,25 @@ func (s *Store) PruneOld(ctx context.Context, retainDays int) (int64, error) {
 	return n, nil
 }
 
+// DeleteAllScores removes all rows from the scores table.
+// Returns the number of rows deleted.
+func (s *Store) DeleteAllScores(ctx context.Context) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, errors.New("store is not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	res, err := s.db.ExecContext(ctx, "DELETE FROM scores")
+	if err != nil {
+		return 0, fmt.Errorf("delete all scores: %w", err)
+	}
+
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // GetAlsoIn returns "also seen in" channels for the given post IDs.
 // Returns a map of postID → ["source/channel", ...].
 func (s *Store) GetAlsoIn(ctx context.Context, postIDs []int64) (map[int64][]string, error) {
@@ -525,13 +544,14 @@ func (s *Store) GetAlsoIn(ctx context.Context, postIDs []int64) (map[int64][]str
 
 // ChannelStats holds aggregated scoring stats for one channel.
 type ChannelStats struct {
-	Source   string
-	Channel  string
-	Total    int
-	ReadNow  int
-	Skim     int
-	Ignored  int
-	LastSeen time.Time
+	Source    string
+	Channel   string
+	Total     int
+	ReadNow   int
+	Skim      int
+	Ignored   int
+	FirstSeen time.Time
+	LastSeen  time.Time
 }
 
 // GetChannelStats returns per-channel scoring aggregates for posts since the given time.
@@ -549,6 +569,7 @@ func (s *Store) GetChannelStats(ctx context.Context, since time.Time) ([]Channel
 			SUM(CASE WHEN s.tier = 'read_now' THEN 1 ELSE 0 END) AS read_now,
 			SUM(CASE WHEN s.tier = 'skim' THEN 1 ELSE 0 END) AS skim,
 			SUM(CASE WHEN s.tier = 'ignore' OR s.tier IS NULL THEN 1 ELSE 0 END) AS ignored,
+			MIN(p.posted_at) AS first_seen,
 			MAX(p.posted_at) AS last_seen
 		FROM posts p
 		LEFT JOIN scores s ON s.post_id = p.id
@@ -564,9 +585,13 @@ func (s *Store) GetChannelStats(ctx context.Context, since time.Time) ([]Channel
 	var stats []ChannelStats
 	for rows.Next() {
 		var cs ChannelStats
-		var lastSeen string
-		if err := rows.Scan(&cs.Source, &cs.Channel, &cs.Total, &cs.ReadNow, &cs.Skim, &cs.Ignored, &lastSeen); err != nil {
+		var firstSeen, lastSeen string
+		if err := rows.Scan(&cs.Source, &cs.Channel, &cs.Total, &cs.ReadNow, &cs.Skim, &cs.Ignored, &firstSeen, &lastSeen); err != nil {
 			return nil, fmt.Errorf("scan channel stats: %w", err)
+		}
+		cs.FirstSeen, err = parseTime(firstSeen)
+		if err != nil {
+			return nil, fmt.Errorf("parse first_seen: %w", err)
 		}
 		cs.LastSeen, err = parseTime(lastSeen)
 		if err != nil {
