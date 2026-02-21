@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0]
+
+- Stats command: per-channel signal-to-noise ratios, scoring distribution, stale channel detection
+- Trending detection: keywords appearing in 3+ channels highlighted at top of digest
+- OPML feed import: `noisepan import feeds.opml` for bulk RSS onboarding
+- Digest output routing: `--output` flag for file, `--webhook` flag for HTTP POST
+- Feed health checks in doctor: stale feeds and all-ignored feeds warnings
+- SKILL.md for agent integration with JSON output structure and workflow examples
+
 ## [0.2.2]
 
 - E2E pipeline integration tests
