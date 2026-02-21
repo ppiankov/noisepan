@@ -60,11 +60,17 @@ thresholds:
 | `noisepan digest` | Score all posts, output ranked digest |
 | `noisepan digest --format json` | Machine-readable JSON output |
 | `noisepan digest --format markdown` | Markdown table output |
+| `noisepan digest --output /tmp/d.md --format markdown` | Write digest to file |
+| `noisepan digest --webhook https://hooks.slack.com/...` | POST JSON digest to webhook |
 | `noisepan run` | Pull + digest in one step |
 | `noisepan run --every 30m` | Continuous mode (pull + digest every 30m) |
+| `noisepan stats` | Per-channel signal-to-noise ratios, scoring distribution |
+| `noisepan stats --since 7d` | Stats for last 7 days |
 | `noisepan verify` | Check source credibility of read_now posts via entropia |
+| `noisepan import feeds.opml` | Import RSS feeds from OPML file |
+| `noisepan import feeds.opml --dry-run` | Preview what would be imported |
 | `noisepan explain <post-id>` | Show scoring breakdown for one post |
-| `noisepan doctor` | Health check: config, database, sources |
+| `noisepan doctor` | Health check: config, database, sources, feed health |
 | `noisepan version` | Print version |
 
 ## Key Flags
@@ -72,11 +78,14 @@ thresholds:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--config DIR` | `.noisepan/` | Config directory |
-| `--since DUR` | `24h` | Time window (e.g., `48h`, `7d`) |
+| `--since DUR` | `24h` / `30d` | Time window (e.g., `48h`, `7d`) |
 | `--format FMT` | `terminal` | Output: `terminal`, `json`, `markdown` |
 | `--source SRC` | all | Filter by source type |
 | `--channel CH` | all | Filter by channel name |
 | `--no-color` | false | Strip ANSI colors |
+| `--output PATH` | stdout | Write digest to file |
+| `--webhook URL` | off | POST digest JSON to URL |
+| `--dry-run` | false | Preview import without modifying config |
 
 ## Agent Usage Pattern
 
@@ -89,41 +98,53 @@ noisepan pull && noisepan digest --format json --since 24h
 ### JSON Output Structure
 
 ```json
-[
-  {
-    "score": 10,
-    "tier": "read_now",
-    "labels": ["critical"],
-    "source": "rss",
-    "channel": "CISA",
-    "title": "CISA Adds Three Known Exploited Vulnerabilities",
-    "url": "https://www.cisa.gov/...",
-    "summary": "First sentence of the post...",
-    "posted_at": "2026-02-20T10:00:00Z"
-  }
-]
+{
+  "meta": { "channels": 28, "total_posts": 191, "since": "1d" },
+  "trending": [
+    { "keyword": "CVE-2026-1234", "channels": ["CISA", "Krebs", "BleepingComputer"] }
+  ],
+  "read_now": [
+    {
+      "source": "rss",
+      "channel": "CISA",
+      "url": "https://www.cisa.gov/...",
+      "posted_at": "2026-02-20T10:00:00Z",
+      "score": 10,
+      "tier": "read_now",
+      "labels": ["critical"],
+      "headline": "First sentence of the post..."
+    }
+  ],
+  "skims": [],
+  "ignored": 164
+}
 ```
 
 ### Parsing Examples
 
 ```bash
 # Get all read_now items
-noisepan digest --format json | jq '[.[] | select(.tier == "read_now")]'
+noisepan digest --format json | jq '.read_now'
 
 # Get URLs of critical posts
-noisepan digest --format json | jq -r '.[] | select(.labels | index("critical")) | .url'
+noisepan digest --format json | jq -r '.read_now[] | select(.labels | index("critical")) | .url'
 
-# Count by tier
-noisepan digest --format json | jq 'group_by(.tier) | map({tier: .[0].tier, count: length})'
+# Get trending topics
+noisepan digest --format json | jq '.trending'
+
+# Save digest to file and post to webhook
+noisepan digest --output ~/digest.json --format json --webhook https://hooks.slack.com/...
 ```
 
 ## Typical Workflow
 
 1. **One-time setup:** `noisepan init` → edit config.yaml + taste.yaml
-2. **Add feeds:** Edit `~/.noisepan/config.yaml` sources section
+2. **Add feeds:** Edit `~/.noisepan/config.yaml` or `noisepan import feeds.opml`
 3. **Tune weights:** Edit `~/.noisepan/taste.yaml` to match the operator's interests
-4. **Daily digest:** `noisepan run` (or cron: `0 8 * * * noisepan run --format json > /tmp/digest.json`)
-5. **Verify top posts:** `noisepan verify` (requires `entropia` in PATH)
+4. **Daily digest:** `noisepan run` (or cron: `0 8 * * * noisepan run --output /tmp/digest.json --format json`)
+5. **Check analytics:** `noisepan stats` to see signal-to-noise ratios per feed
+6. **Verify top posts:** `noisepan verify` (requires `entropia` in PATH)
+7. **Automated delivery:** `noisepan run --webhook https://hooks.slack.com/...`
 
 ## Integration with entropia
 
