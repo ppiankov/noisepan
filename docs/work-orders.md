@@ -742,7 +742,7 @@ noisepan verify — 6 read_now posts, 5 with URLs
 
 ### WO-N20: Stats command — feed and scoring analytics
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** high — the tool looking at itself, helps users tune their setup
 
 ### Summary
@@ -806,7 +806,7 @@ noisepan stats — 30 days, 4217 posts from 28 channels
 
 ### WO-N21: Feed health checks in doctor
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** medium — practical early warning for broken feeds
 
 ### Summary
@@ -839,7 +839,7 @@ Extend `noisepan doctor` to check feed health: detect stale feeds (no posts in 7
 
 ### WO-N22: Trending detection — cross-source mention counting
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** medium — surfaces breaking stories that appear across multiple feeds
 **Depends on:** WO-N20
 
@@ -894,7 +894,7 @@ Output format:
 
 ### WO-N23: OPML feed import
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** low — onboarding convenience
 
 ### Summary
@@ -943,7 +943,7 @@ Add `noisepan import <file.opml>` command that reads an OPML file (standard RSS 
 
 ### WO-N24: Digest output routing (file and webhook)
 
-**Status:** `[ ]` planned
+**Status:** `[x]` done
 **Priority:** low — enables automated delivery without external scripting
 
 ### Summary

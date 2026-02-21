@@ -5,11 +5,17 @@ import (
 	"io"
 )
 
+type jsonTrend struct {
+	Keyword  string   `json:"keyword"`
+	Channels []string `json:"channels"`
+}
+
 type jsonDigest struct {
-	Meta    jsonMeta   `json:"meta"`
-	ReadNow []jsonItem `json:"read_now"`
-	Skims   []jsonItem `json:"skims"`
-	Ignored int        `json:"ignored"`
+	Meta     jsonMeta    `json:"meta"`
+	Trending []jsonTrend `json:"trending,omitempty"`
+	ReadNow  []jsonItem  `json:"read_now"`
+	Skims    []jsonItem  `json:"skims"`
+	Ignored  int         `json:"ignored"`
 }
 
 type jsonMeta struct {
@@ -43,15 +49,21 @@ func NewJSON() *JSONFormatter {
 func (f *JSONFormatter) Format(w io.Writer, input DigestInput) error {
 	readNow, skims, ignoreCount := groupByTier(input.Items)
 
+	var trends []jsonTrend
+	for _, tr := range input.Trending {
+		trends = append(trends, jsonTrend{Keyword: tr.Keyword, Channels: tr.Channels})
+	}
+
 	out := jsonDigest{
 		Meta: jsonMeta{
 			Channels:   input.Channels,
 			TotalPosts: input.TotalPosts,
 			Since:      formatDuration(input.Since),
 		},
-		ReadNow: toJSONItems(readNow),
-		Skims:   toJSONItems(skims),
-		Ignored: ignoreCount,
+		Trending: trends,
+		ReadNow:  toJSONItems(readNow),
+		Skims:    toJSONItems(skims),
+		Ignored:  ignoreCount,
 	}
 
 	enc := json.NewEncoder(w)

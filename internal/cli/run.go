@@ -25,6 +25,13 @@ var runCmd = &cobra.Command{
 
 func init() {
 	runCmd.Flags().StringVar(&runEvery, "every", "", "run continuously at interval (e.g. 30m)")
+	runCmd.Flags().StringVar(&digestSince, "since", "", "time window (e.g. 48h)")
+	runCmd.Flags().StringVar(&digestFormat, "format", "", "output format: terminal, json, markdown")
+	runCmd.Flags().StringVar(&digestSource, "source", "", "filter by source")
+	runCmd.Flags().StringVar(&digestChannel, "channel", "", "filter by channel name")
+	runCmd.Flags().BoolVar(&noColor, "no-color", false, "disable ANSI colors")
+	runCmd.Flags().StringVar(&digestOutput, "output", "", "write digest to file")
+	runCmd.Flags().StringVar(&digestWebhook, "webhook", "", "POST digest JSON to URL")
 }
 
 func runAction(cmd *cobra.Command, args []string) error {

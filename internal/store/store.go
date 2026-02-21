@@ -523,6 +523,64 @@ func (s *Store) GetAlsoIn(ctx context.Context, postIDs []int64) (map[int64][]str
 	return result, nil
 }
 
+// ChannelStats holds aggregated scoring stats for one channel.
+type ChannelStats struct {
+	Source   string
+	Channel  string
+	Total    int
+	ReadNow  int
+	Skim     int
+	Ignored  int
+	LastSeen time.Time
+}
+
+// GetChannelStats returns per-channel scoring aggregates for posts since the given time.
+func (s *Store) GetChannelStats(ctx context.Context, since time.Time) ([]ChannelStats, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("store is not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT p.source, p.channel,
+			COUNT(*) AS total,
+			SUM(CASE WHEN s.tier = 'read_now' THEN 1 ELSE 0 END) AS read_now,
+			SUM(CASE WHEN s.tier = 'skim' THEN 1 ELSE 0 END) AS skim,
+			SUM(CASE WHEN s.tier = 'ignore' OR s.tier IS NULL THEN 1 ELSE 0 END) AS ignored,
+			MAX(p.posted_at) AS last_seen
+		FROM posts p
+		LEFT JOIN scores s ON s.post_id = p.id
+		WHERE p.posted_at >= ?
+		GROUP BY p.source, p.channel
+		ORDER BY p.source, p.channel
+	`, formatTime(since))
+	if err != nil {
+		return nil, fmt.Errorf("get channel stats: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var stats []ChannelStats
+	for rows.Next() {
+		var cs ChannelStats
+		var lastSeen string
+		if err := rows.Scan(&cs.Source, &cs.Channel, &cs.Total, &cs.ReadNow, &cs.Skim, &cs.Ignored, &lastSeen); err != nil {
+			return nil, fmt.Errorf("scan channel stats: %w", err)
+		}
+		cs.LastSeen, err = parseTime(lastSeen)
+		if err != nil {
+			return nil, fmt.Errorf("parse last_seen: %w", err)
+		}
+		stats = append(stats, cs)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate channel stats: %w", err)
+	}
+
+	return stats, nil
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }

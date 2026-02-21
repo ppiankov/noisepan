@@ -35,6 +35,18 @@ func (f *TerminalFormatter) Format(w io.Writer, input DigestInput) error {
 		return nil
 	}
 
+	// Trending section
+	if len(input.Trending) > 0 {
+		fmt.Fprintln(w, f.bold(fmt.Sprintf("--- Trending (appeared in %d+ sources) ---", 3)))
+		fmt.Fprintln(w)
+		for _, tr := range input.Trending {
+			fmt.Fprintf(w, "  %s — mentioned in %d channels\n",
+				f.bold(fmt.Sprintf("%q", tr.Keyword)), len(tr.Channels))
+			fmt.Fprintf(w, "    %s\n", f.dim(strings.Join(tr.Channels, ", ")))
+		}
+		fmt.Fprintln(w)
+	}
+
 	// Read Now section
 	if len(readNow) > 0 {
 		fmt.Fprintln(w, f.green(f.bold(fmt.Sprintf("--- Read Now (%d) ---", len(readNow)))))
