@@ -27,6 +27,15 @@ func (f *MarkdownFormatter) Format(w io.Writer, input DigestInput) error {
 		return nil
 	}
 
+	if len(input.Trending) > 0 {
+		fmt.Fprintf(w, "## Trending (appeared in %d+ sources)\n\n", 3)
+		for _, tr := range input.Trending {
+			fmt.Fprintf(w, "- **%q** — mentioned in %d channels: %s\n",
+				tr.Keyword, len(tr.Channels), strings.Join(tr.Channels, ", "))
+		}
+		fmt.Fprintln(w)
+	}
+
 	if len(readNow) > 0 {
 		fmt.Fprintf(w, "## Read Now (%d)\n\n", len(readNow))
 		for _, item := range readNow {

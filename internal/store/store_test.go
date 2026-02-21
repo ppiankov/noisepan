@@ -603,6 +603,120 @@ func TestGetAlsoIn_Empty(t *testing.T) {
 	}
 }
 
+func TestGetChannelStats(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 2, 16, 8, 0, 0, 0, time.UTC)
+
+	// Insert posts across two channels
+	p1, err := st.InsertPost(ctx, PostInput{
+		Source: "rss", Channel: "blog-a", ExternalID: "1",
+		Text: "cve zero-day", PostedAt: base, FetchedAt: base.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	p2, err := st.InsertPost(ctx, PostInput{
+		Source: "rss", Channel: "blog-a", ExternalID: "2",
+		Text: "hiring webinar", PostedAt: base.Add(time.Hour), FetchedAt: base.Add(time.Hour + time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	p3, err := st.InsertPost(ctx, PostInput{
+		Source: "rss", Channel: "blog-b", ExternalID: "3",
+		Text: "kubernetes update", PostedAt: base.Add(2 * time.Hour), FetchedAt: base.Add(2*time.Hour + time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	// Score posts
+	if err := st.SaveScore(ctx, Score{PostID: p1.ID, Score: 10, Tier: "read_now", ScoredAt: base.Add(3 * time.Hour)}); err != nil {
+		t.Fatalf("save score: %v", err)
+	}
+	if err := st.SaveScore(ctx, Score{PostID: p2.ID, Score: 1, Tier: "ignore", ScoredAt: base.Add(3 * time.Hour)}); err != nil {
+		t.Fatalf("save score: %v", err)
+	}
+	if err := st.SaveScore(ctx, Score{PostID: p3.ID, Score: 5, Tier: "skim", ScoredAt: base.Add(3 * time.Hour)}); err != nil {
+		t.Fatalf("save score: %v", err)
+	}
+
+	stats, err := st.GetChannelStats(ctx, base.Add(-time.Minute))
+	if err != nil {
+		t.Fatalf("get channel stats: %v", err)
+	}
+
+	if len(stats) != 2 {
+		t.Fatalf("expected 2 channels, got %d", len(stats))
+	}
+
+	// blog-a: 2 total, 1 read_now, 0 skim, 1 ignored
+	a := stats[0]
+	if a.Channel != "blog-a" {
+		t.Errorf("channel = %q, want blog-a", a.Channel)
+	}
+	if a.Total != 2 {
+		t.Errorf("total = %d, want 2", a.Total)
+	}
+	if a.ReadNow != 1 {
+		t.Errorf("read_now = %d, want 1", a.ReadNow)
+	}
+	if a.Ignored != 1 {
+		t.Errorf("ignored = %d, want 1", a.Ignored)
+	}
+
+	// blog-b: 1 total, 0 read_now, 1 skim, 0 ignored
+	b := stats[1]
+	if b.Channel != "blog-b" {
+		t.Errorf("channel = %q, want blog-b", b.Channel)
+	}
+	if b.Skim != 1 {
+		t.Errorf("skim = %d, want 1", b.Skim)
+	}
+}
+
+func TestGetChannelStats_Empty(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	stats, err := st.GetChannelStats(ctx, time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatalf("get channel stats: %v", err)
+	}
+	if len(stats) != 0 {
+		t.Errorf("expected 0 channels, got %d", len(stats))
+	}
+}
+
+func TestGetChannelStats_UnscoredCountsAsIgnored(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 2, 16, 8, 0, 0, 0, time.UTC)
+
+	_, err := st.InsertPost(ctx, PostInput{
+		Source: "rss", Channel: "feed", ExternalID: "1",
+		Text: "unscored post", PostedAt: base, FetchedAt: base.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	stats, err := st.GetChannelStats(ctx, base.Add(-time.Minute))
+	if err != nil {
+		t.Fatalf("get channel stats: %v", err)
+	}
+
+	if len(stats) != 1 {
+		t.Fatalf("expected 1 channel, got %d", len(stats))
+	}
+	if stats[0].Ignored != 1 {
+		t.Errorf("ignored = %d, want 1 (unscored should count as ignored)", stats[0].Ignored)
+	}
+}
+
 func TestGetAlsoIn_NilIDs(t *testing.T) {
 	st, _ := openTestStore(t)
 	ctx := context.Background()

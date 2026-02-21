@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/ppiankov/noisepan/internal/config"
 	"github.com/ppiankov/noisepan/internal/store"
@@ -52,13 +54,14 @@ func doctorAction(_ *cobra.Command, _ []string) error {
 	}
 
 	// Database
+	var db *store.Store
 	if cfg != nil {
-		db, err := store.Open(cfg.Storage.Path)
+		db, err = store.Open(cfg.Storage.Path)
 		if err != nil {
 			printCheck(false, "database: %v", err)
 			ok = false
 		} else {
-			_ = db.Close()
+			defer func() { _ = db.Close() }()
 			printCheck(true, "database %s", cfg.Storage.Path)
 		}
 	}
@@ -104,11 +107,49 @@ func doctorAction(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	// Feed health (info-level, non-fatal)
+	if db != nil && cfg != nil {
+		checkFeedHealth(db, cfg)
+	}
+
 	if !ok {
 		return fmt.Errorf("some checks failed")
 	}
 	fmt.Println("\nAll checks passed.")
 	return nil
+}
+
+func checkFeedHealth(db *store.Store, cfg *config.Config) {
+	ctx := context.Background()
+
+	// Look back 30 days for feed health assessment
+	since := time.Now().AddDate(0, 0, -30)
+	stats, err := db.GetChannelStats(ctx, since)
+	if err != nil || len(stats) == 0 {
+		return // no data yet, skip
+	}
+
+	// Build set of configured channels for comparison
+	configuredFeeds := make(map[string]bool)
+	for _, feed := range cfg.Sources.RSS.Feeds {
+		configuredFeeds[feed] = true
+	}
+	for _, ch := range cfg.Sources.Telegram.Channels {
+		configuredFeeds[ch] = true
+	}
+
+	staleThreshold := time.Now().AddDate(0, 0, -staleDays)
+	fmt.Println()
+
+	for _, cs := range stats {
+		if cs.LastSeen.Before(staleThreshold) {
+			daysAgo := int(time.Since(cs.LastSeen).Hours() / 24)
+			printInfo("stale: %s — last post %d days ago", cs.Channel, daysAgo)
+		}
+		if cs.Total >= 5 && cs.Ignored == cs.Total {
+			printInfo("all noise: %s — %d posts, all ignored (consider adjusting taste profile)", cs.Channel, cs.Total)
+		}
+	}
 }
 
 func printCheck(pass bool, format string, args ...any) {
@@ -117,4 +158,8 @@ func printCheck(pass bool, format string, args ...any) {
 		mark = " OK "
 	}
 	fmt.Printf("[%s] %s\n", mark, fmt.Sprintf(format, args...))
+}
+
+func printInfo(format string, args ...any) {
+	fmt.Printf("[INFO] %s\n", fmt.Sprintf(format, args...))
 }
