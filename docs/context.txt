@@ -10,7 +10,7 @@ Local-only signal extractor for noisy information streams. Telegram, RSS sources
 - Not a devops/security tool — it's a general information filter that users configure for their topics
 
 ## Current state
-All work orders (N01-N24) are implemented. The full pipeline works end-to-end: pull → score → summarize → digest → verify. Released as v0.2.2 via Homebrew (`brew install ppiankov/tap/noisepan`). N17-N19 implemented via runforge batch run. N20-N24 (Phase 5) implemented: stats command, feed health in doctor, trending detection, OPML import, output routing. Entropia released as v0.2.0 via Homebrew (`brew install ppiankov/tap/entropia`).
+All work orders (N01-N29) are implemented. The full pipeline works end-to-end: pull → score → summarize → digest → verify. Released as v0.3.0 via Homebrew (`brew install ppiankov/tap/noisepan`). Phase 6 (N25-N29) adds performance, reliability, and operational intelligence: database indexes, parallel RSS fetching, rescore command, stats maturity/JSON, RSS retry with backoff.
 
 ### Completed WOs
 - N01: SQLite storage layer (posts, scores, metadata, post_also_in)
@@ -37,6 +37,11 @@ All work orders (N01-N24) are implemented. The full pipeline works end-to-end: p
 - N22: Trending detection (cross-source keyword mention counting, 3+ channels)
 - N23: OPML feed import (parse OPML XML, merge into config.yaml)
 - N24: Digest output routing (--output file, --webhook URL)
+- N25: Database indexes and schema v2 (idx_posts_posted_at, idx_posts_text_hash, idx_posts_source_channel, idx_scores_tier)
+- N26: Parallel RSS fetching (bounded goroutine pool, 10 workers)
+- N27: Rescore command (delete all scores, re-score with current taste profile)
+- N28: Stats maturity and JSON output (FirstSeen, --format json, maturity annotation for <30d data)
+- N29: RSS retry with exponential backoff (3 attempts, 1s/2s/4s, retry on timeout/429/5xx)
 
 ### Post-WO improvements
 - Release workflow (.github/workflows/release.yml) — tag-triggered, 4 platforms, auto-updates homebrew-tap
@@ -46,19 +51,20 @@ All work orders (N01-N24) are implemented. The full pipeline works end-to-end: p
 - Browser-like User-Agent on RSS fetcher (required for Reddit RSS)
 - Setup guide (docs/setup-guide.md) with fish/bash/zsh shell instructions
 - README rewritten: no fabricated headlines, generic examples from authoritative sources, full verify workflow section explaining that high score != credibility
-- GitHub topics: cli, golang, homebrew, rss, telegram, sqlite, terminal, digest, keyword-scoring, signal-extraction, information-filtering, signal-to-noise (removed devops, devsecops, reddit, security — those describe user content, not the tool)
+- GitHub topics: cli, golang, homebrew, rss, telegram, sqlite, terminal, digest, keyword-scoring, signal-extraction, information-filtering, signal-to-noise
 - 30+ authoritative RSS feeds configured (CISA, Krebs, Schneier, Project Zero, Kubernetes blog, CNCF, Cloudflare, Simon Willison, etc.)
 - Taste profile supports any language via user-configured keywords
-- 6 broken RSS feed URLs fixed (NCC Group, Sysdig, Tigera, Datadog, Semgrep; Anthropic has no RSS)
+- 6 broken RSS feed URLs fixed
+- SKILL.md for agent integration with JSON output structure and workflow examples
 
 ## Architecture
 ```
 cmd/noisepan/main.go       -- entry point
 internal/
-  cli/                     -- Cobra commands (init, pull, digest, run, verify, doctor, explain, stats, import)
+  cli/                     -- Cobra commands (init, pull, digest, run, verify, doctor, explain, stats, import, rescore)
   config/                  -- YAML config + taste profile
-  source/                  -- Source interface (telegram, rss, forgeplan)
-  store/                   -- SQLite storage (posts, scores, dedup, prune, channel stats)
+  source/                  -- Source interface (telegram, rss, forgeplan) with parallel fetch + retry
+  store/                   -- SQLite storage (posts, scores, dedup, prune, channel stats, indexed)
   taste/                   -- Scoring engine (keywords, rules, tiers, trending)
   summarize/               -- Heuristic + LLM summarizers
   digest/                  -- Terminal/JSON/Markdown formatters (with trending section)
@@ -77,6 +83,9 @@ internal/
 - Reddit JSON API dead since Nov 2025 — use RSS feeds with browser UA instead
 - Telegram python_path and script configurable for venv support
 - Entropia verify: shells out to entropia binary, skips unscannable domains (reddit.com, t.me)
+- Schema v2: indexes on posted_at, text_hash, source/channel, tier
+- Parallel RSS: bounded goroutine pool (10 workers) with retry (3 attempts, exponential backoff)
+- Stats maturity: channels with <30 days of data get "(Nd data)" annotation to prevent premature pruning
 
 ## Dependencies
 - github.com/spf13/cobra (CLI)
@@ -101,13 +110,13 @@ brew update && brew upgrade noisepan
 ```
 
 ## Cross-project integration
-- **entropia**: `noisepan verify` runs `entropia scan` on read_now post URLs. Entropia E01-E08 all complete (lint fixes, LDFLAGS, CLAUDE.md, Go 1.25, test coverage, proxy support, Homebrew packaging). Released as v0.2.0 via Homebrew. HOMEBREW_TAP_TOKEN set. Both entropia.rb and noisepan.rb confirmed in homebrew-tap. CI fixed: golangci-lint pinned to v2.10.1 (action v7) for Go 1.25 compatibility.
-- **runforge**: Used to batch-execute N17-N19 and entropia E01-E07. Task file: runforge-noisepan-entropia.json at parent dir.
-- **forgeaware**: WO executions via runforge generate metrics for forgeaware launch gate (needs ≥50 logged WOs).
+- **entropia**: `noisepan verify` runs `entropia scan` on read_now post URLs. Entropia E01-E08 all complete. Released as v0.2.0 via Homebrew.
+- **runforge**: Used to batch-execute N17-N19 and entropia E01-E07.
+- **forgeaware**: WO executions via runforge generate metrics for forgeaware launch gate.
 
 ## Pending WOs
 
-None — all work orders (N01-N24) are complete.
+None — all work orders (N01-N29) are complete. Phase 6 not yet released (needs tag v0.4.0).
 
 ## Known issues
 - Reddit JSON API returns 403 — must use RSS feeds instead

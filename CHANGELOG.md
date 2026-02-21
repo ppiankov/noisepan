@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0]
+
+- Rescore command: `noisepan rescore` recomputes all scores with current taste profile
+- Stats JSON output: `noisepan stats --format json` for scripted monitoring
+- Stats maturity indicator: channels with <30 days of data show "(Nd data)" to prevent premature pruning
+- Database indexes on posted_at, text_hash, source/channel, tier (schema v2)
+- Parallel RSS fetching: bounded goroutine pool (10 workers)
+- RSS retry with exponential backoff (3 attempts, 1s/2s/4s on timeout/429/5xx)
+
 ## [0.3.0]
 
 - Stats command: per-channel signal-to-noise ratios, scoring distribution, stale channel detection

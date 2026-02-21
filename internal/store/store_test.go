@@ -35,8 +35,27 @@ func TestOpenAndMigrate(t *testing.T) {
 	if err := st.db.QueryRow("SELECT value FROM metadata WHERE key = 'schema_version'").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != "1" {
+	if version != "2" {
 		t.Fatalf("unexpected schema version: %s", version)
+	}
+}
+
+func TestSchemaHasIndexes(t *testing.T) {
+	st, _ := openTestStore(t)
+
+	expectedIndexes := []string{
+		"idx_posts_posted_at",
+		"idx_posts_text_hash",
+		"idx_posts_source_channel",
+		"idx_scores_tier",
+	}
+
+	for _, idx := range expectedIndexes {
+		var name string
+		err := st.db.QueryRow("SELECT name FROM sqlite_master WHERE type='index' AND name=?", idx).Scan(&name)
+		if err != nil {
+			t.Errorf("index %s not found: %v", idx, err)
+		}
 	}
 }
 
@@ -714,6 +733,73 @@ func TestGetChannelStats_UnscoredCountsAsIgnored(t *testing.T) {
 	}
 	if stats[0].Ignored != 1 {
 		t.Errorf("ignored = %d, want 1 (unscored should count as ignored)", stats[0].Ignored)
+	}
+}
+
+func TestDeleteAllScores(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	base := time.Date(2026, 2, 16, 8, 0, 0, 0, time.UTC)
+
+	p1, err := st.InsertPost(ctx, PostInput{
+		Source: "rss", Channel: "feed", ExternalID: "1",
+		Text: "post one", PostedAt: base, FetchedAt: base.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	p2, err := st.InsertPost(ctx, PostInput{
+		Source: "rss", Channel: "feed", ExternalID: "2",
+		Text: "post two", PostedAt: base.Add(time.Hour), FetchedAt: base.Add(time.Hour + time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	if err := st.SaveScore(ctx, Score{PostID: p1.ID, Score: 10, Tier: "read_now", ScoredAt: base.Add(2 * time.Hour)}); err != nil {
+		t.Fatalf("save score: %v", err)
+	}
+	if err := st.SaveScore(ctx, Score{PostID: p2.ID, Score: 3, Tier: "skim", ScoredAt: base.Add(2 * time.Hour)}); err != nil {
+		t.Fatalf("save score: %v", err)
+	}
+
+	deleted, err := st.DeleteAllScores(ctx)
+	if err != nil {
+		t.Fatalf("delete all scores: %v", err)
+	}
+	if deleted != 2 {
+		t.Errorf("deleted = %d, want 2", deleted)
+	}
+
+	// Verify scores are gone
+	var count int
+	if err := st.db.QueryRow("SELECT COUNT(*) FROM scores").Scan(&count); err != nil {
+		t.Fatalf("count scores: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("scores remaining = %d, want 0", count)
+	}
+
+	// Verify posts still exist
+	if err := st.db.QueryRow("SELECT COUNT(*) FROM posts").Scan(&count); err != nil {
+		t.Fatalf("count posts: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("posts remaining = %d, want 2", count)
+	}
+}
+
+func TestDeleteAllScores_Empty(t *testing.T) {
+	st, _ := openTestStore(t)
+	ctx := context.Background()
+
+	deleted, err := st.DeleteAllScores(ctx)
+	if err != nil {
+		t.Fatalf("delete all scores: %v", err)
+	}
+	if deleted != 0 {
+		t.Errorf("deleted = %d, want 0", deleted)
 	}
 }
 

@@ -34,3 +34,8 @@ CREATE TABLE IF NOT EXISTS metadata (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_posts_posted_at ON posts(posted_at);
+CREATE INDEX IF NOT EXISTS idx_posts_text_hash ON posts(text_hash);
+CREATE INDEX IF NOT EXISTS idx_posts_source_channel ON posts(source, channel);
+CREATE INDEX IF NOT EXISTS idx_scores_tier ON scores(tier);

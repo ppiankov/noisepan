@@ -992,3 +992,110 @@ WO-N24 (output routing) → standalone
 ```
 
 N20 is the highest-leverage starting point — it informs all other improvements.
+
+---
+
+## Phase 6: Performance, Reliability, and Operational Intelligence
+
+### WO-N25: Database indexes and schema v2 migration
+
+**Status:** `[x]` done
+**Priority:** high — every query full-scans without indexes
+
+### Summary
+
+Add indexes on `posted_at`, `text_hash`, `source/channel`, and `tier`. Bump schema version to 2 with idempotent `CREATE INDEX IF NOT EXISTS`.
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/store/schema.sql` | Add 4 `CREATE INDEX IF NOT EXISTS` statements |
+| `internal/store/schema.go` | Bump `schemaVersion` to 2 |
+| `internal/store/store_test.go` | Test indexes exist via `sqlite_master`, verify v2 migration |
+
+---
+
+### WO-N26: Parallel RSS fetching
+
+**Status:** `[x]` done
+**Priority:** high — 30 feeds × 30s timeout = 15 min worst case
+
+### Summary
+
+Replace sequential RSS loop with bounded goroutine pool (10 workers). Errors remain non-fatal per feed.
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/source/rss.go` | Worker pool with `sync.WaitGroup` + channels, `rssMaxWorkers = 10` |
+
+---
+
+### WO-N27: `noisepan rescore` command
+
+**Status:** `[x]` done
+**Priority:** medium — taste profile changes leave stale scores
+
+### Summary
+
+Delete all existing scores, re-score every post in the time window using the current taste profile.
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/store/store.go` | Add `DeleteAllScores(ctx) (int64, error)` |
+| `internal/store/store_test.go` | Test DeleteAllScores |
+| `internal/cli/rescore.go` | New command: loads config + taste, deletes scores, re-scores all posts |
+| `internal/cli/rescore_test.go` | Test rescore output and tier recalculation |
+
+---
+
+### WO-N28: Stats data maturity and JSON output
+
+**Status:** `[x]` done
+**Priority:** medium — prevents over-pruning young feeds, enables scripted monitoring
+
+### Summary
+
+Add `FirstSeen` to channel stats, `--format json` flag, and maturity annotation for channels with < 30 days of data.
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/store/store.go` | Add `FirstSeen time.Time` to `ChannelStats`, add `MIN(p.posted_at)` to query |
+| `internal/cli/stats.go` | Add `--format json` flag, maturity annotation "(Nd data)" for young channels |
+| `internal/cli/stats_test.go` | Test JSON output, maturity annotation, young vs mature feeds |
+
+---
+
+### WO-N29: RSS retry with exponential backoff
+
+**Status:** `[x]` done
+**Priority:** medium — transient network errors kill fetches immediately
+
+### Summary
+
+Add `fetchWithRetry()` wrapping `fetchFeed()`. Max 3 attempts, backoff 1s/2s/4s. Retry on timeout, 429, 5xx. No retry on 4xx (except 429).
+
+### Scope
+
+| File | Change |
+|------|--------|
+| `internal/source/rss.go` | Add `fetchWithRetry()`, `isRetryableError()`, injectable sleep for tests |
+| `internal/source/rss_test.go` | Test transient→success, permanent failure, all retries exhausted |
+
+---
+
+## Execution Order (Phase 6)
+
+```
+N25 (indexes) ─────→ N28 (stats maturity) — needs FirstSeen from indexed query
+N26 (parallel RSS) → N29 (RSS retry) — retry wraps the fetch function
+N27 (rescore) ─────→ standalone
+```
+
+N25, N26, N27 started in parallel. N28 after N25. N29 after N26.

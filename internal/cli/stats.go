@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"time"
@@ -11,7 +13,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var statsSince string
+var (
+	statsSince  string
+	statsFormat string
+)
 
 var statsCmd = &cobra.Command{
 	Use:   "stats",
@@ -21,10 +26,14 @@ var statsCmd = &cobra.Command{
 
 func init() {
 	statsCmd.Flags().StringVar(&statsSince, "since", "30d", "time window (e.g. 7d, 48h)")
+	statsCmd.Flags().StringVar(&statsFormat, "format", "terminal", "output format: terminal, json")
 	rootCmd.AddCommand(statsCmd)
 }
 
-const staleDays = 7
+const (
+	staleDays         = 7
+	maturityThreshold = 30 // days of data needed before stats are reliable
+)
 
 func statsAction(cmd *cobra.Command, _ []string) error {
 	cfg, err := config.Load(configDir)
@@ -52,15 +61,87 @@ func statsAction(cmd *cobra.Command, _ []string) error {
 	}
 
 	if len(stats) == 0 {
+		if statsFormat == "json" {
+			fmt.Fprintln(os.Stdout, `{"channels":[],"distribution":{}}`)
+			return nil
+		}
 		fmt.Fprintln(os.Stdout, "No posts found. Run 'noisepan pull' first.")
 		return nil
 	}
 
-	printStats(os.Stdout, stats, sinceDur)
-	return nil
+	switch statsFormat {
+	case "json":
+		return printStatsJSON(os.Stdout, stats, sinceDur)
+	case "terminal", "":
+		printStats(os.Stdout, stats, sinceDur)
+		return nil
+	default:
+		return fmt.Errorf("unknown format %q (want terminal or json)", statsFormat)
+	}
+}
+
+type jsonStatsOutput struct {
+	Channels     []jsonChannelStats `json:"channels"`
+	Distribution jsonDistribution   `json:"distribution"`
+}
+
+type jsonChannelStats struct {
+	Source   string  `json:"source"`
+	Channel  string  `json:"channel"`
+	Total    int     `json:"total"`
+	ReadNow  int     `json:"read_now"`
+	Skim     int     `json:"skim"`
+	Ignored  int     `json:"ignored"`
+	Signal   float64 `json:"signal_pct"`
+	DataDays int     `json:"data_days"`
+}
+
+type jsonDistribution struct {
+	ReadNow int `json:"read_now"`
+	Skim    int `json:"skim"`
+	Ignored int `json:"ignored"`
+	Total   int `json:"total"`
+}
+
+func printStatsJSON(w io.Writer, stats []store.ChannelStats, _ time.Duration) error {
+	now := time.Now()
+	channels := make([]jsonChannelStats, 0, len(stats))
+	dist := jsonDistribution{}
+
+	for _, cs := range stats {
+		dataDays := int(now.Sub(cs.FirstSeen).Hours() / 24)
+		if dataDays < 1 {
+			dataDays = 1
+		}
+		channels = append(channels, jsonChannelStats{
+			Source:   cs.Source,
+			Channel:  cs.Channel,
+			Total:    cs.Total,
+			ReadNow:  cs.ReadNow,
+			Skim:     cs.Skim,
+			Ignored:  cs.Ignored,
+			Signal:   signalPct(cs),
+			DataDays: dataDays,
+		})
+		dist.ReadNow += cs.ReadNow
+		dist.Skim += cs.Skim
+		dist.Ignored += cs.Ignored
+		dist.Total += cs.Total
+	}
+
+	out := jsonStatsOutput{
+		Channels:     channels,
+		Distribution: dist,
+	}
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(out)
 }
 
 func printStats(w *os.File, stats []store.ChannelStats, since time.Duration) {
+	now := time.Now()
+
 	totalPosts := 0
 	totalReadNow := 0
 	totalSkim := 0
@@ -103,8 +184,13 @@ func printStats(w *os.File, stats []store.ChannelStats, since time.Duration) {
 		if len(name) > maxChan {
 			name = name[:maxChan-1] + "…"
 		}
-		fmt.Fprintf(w, "  %-*s  %5d  %8d  %4d  %7d  %5.0f%%\n",
-			maxChan, name, cs.Total, cs.ReadNow, cs.Skim, cs.Ignored, signalPct(cs))
+		signal := fmt.Sprintf("%5.0f%%", signalPct(cs))
+		dataDays := int(now.Sub(cs.FirstSeen).Hours() / 24)
+		if dataDays < maturityThreshold {
+			signal = fmt.Sprintf("%5.0f%% (%dd data)", signalPct(cs), dataDays)
+		}
+		fmt.Fprintf(w, "  %-*s  %5d  %8d  %4d  %7d  %s\n",
+			maxChan, name, cs.Total, cs.ReadNow, cs.Skim, cs.Ignored, signal)
 	}
 	fmt.Fprintln(w)
 
@@ -117,7 +203,6 @@ func printStats(w *os.File, stats []store.ChannelStats, since time.Duration) {
 	fmt.Fprintln(w)
 
 	// Stale channels
-	now := time.Now()
 	staleThreshold := now.AddDate(0, 0, -staleDays)
 	var stale []store.ChannelStats
 	for _, cs := range stats {

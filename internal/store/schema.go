@@ -13,7 +13,7 @@ import (
 //go:embed schema.sql
 var schemaSQL string
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	if ctx == nil {
