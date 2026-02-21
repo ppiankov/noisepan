@@ -66,6 +66,9 @@ thresholds:
 | `noisepan run --every 30m` | Continuous mode (pull + digest every 30m) |
 | `noisepan stats` | Per-channel signal-to-noise ratios, scoring distribution |
 | `noisepan stats --since 7d` | Stats for last 7 days |
+| `noisepan stats --format json` | Machine-readable stats for scripted monitoring |
+| `noisepan rescore` | Recompute all scores with current taste profile |
+| `noisepan rescore --since 7d` | Rescore only last 7 days |
 | `noisepan verify` | Check source credibility of read_now posts via entropia |
 | `noisepan import feeds.opml` | Import RSS feeds from OPML file |
 | `noisepan import feeds.opml --dry-run` | Preview what would be imported |
@@ -79,7 +82,7 @@ thresholds:
 |------|---------|-------------|
 | `--config DIR` | `.noisepan/` | Config directory |
 | `--since DUR` | `24h` / `30d` | Time window (e.g., `48h`, `7d`) |
-| `--format FMT` | `terminal` | Output: `terminal`, `json`, `markdown` |
+| `--format FMT` | `terminal` | Output: `terminal`, `json`, `markdown` (stats: `terminal`, `json`) |
 | `--source SRC` | all | Filter by source type |
 | `--channel CH` | all | Filter by channel name |
 | `--no-color` | false | Strip ANSI colors |
