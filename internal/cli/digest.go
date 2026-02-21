@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,6 +25,8 @@ var (
 	digestSource  string
 	digestChannel string
 	noColor       bool
+	digestOutput  string
+	digestWebhook string
 )
 
 var digestCmd = &cobra.Command{
@@ -37,6 +41,8 @@ func init() {
 	digestCmd.Flags().StringVar(&digestSource, "source", "", "filter by source (e.g. rss, telegram, reddit)")
 	digestCmd.Flags().StringVar(&digestChannel, "channel", "", "filter by channel name")
 	digestCmd.Flags().BoolVar(&noColor, "no-color", false, "disable ANSI colors")
+	digestCmd.Flags().StringVar(&digestOutput, "output", "", "write digest to file (- for stdout)")
+	digestCmd.Flags().StringVar(&digestWebhook, "webhook", "", "POST digest JSON to URL")
 }
 
 func digestAction(cmd *cobra.Command, _ []string) error {
@@ -188,8 +194,16 @@ func digestAction(cmd *cobra.Command, _ []string) error {
 	}
 	items = limited
 
+	// Detect trending topics across channels
+	var scoredPosts []taste.ScoredPost
+	for _, item := range items {
+		scoredPosts = append(scoredPosts, item.ScoredPost)
+	}
+	trending := taste.FindTrending(scoredPosts, profile, 3)
+
 	input := digest.DigestInput{
 		Items:      items,
+		Trending:   trending,
 		Channels:   len(channels),
 		TotalPosts: len(posts),
 		Since:      sinceDur,
@@ -206,7 +220,56 @@ func digestAction(cmd *cobra.Command, _ []string) error {
 	default:
 		return fmt.Errorf("unknown format %q (want terminal, json, or markdown)", digestFormat)
 	}
-	return formatter.Format(os.Stdout, input)
+
+	// Determine output writer
+	w := os.Stdout
+	if digestOutput != "" && digestOutput != "-" {
+		dir := filepath.Dir(digestOutput)
+		if dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return fmt.Errorf("create output dir: %w", err)
+			}
+		}
+		f, err := os.Create(digestOutput)
+		if err != nil {
+			return fmt.Errorf("create output file: %w", err)
+		}
+		defer func() { _ = f.Close() }()
+		w = f
+	}
+
+	if err := formatter.Format(w, input); err != nil {
+		return err
+	}
+
+	// Webhook: always POST as JSON regardless of --format
+	if digestWebhook != "" {
+		if err := postWebhook(digestWebhook, input); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: webhook failed: %v\n", err)
+		}
+	}
+
+	return nil
+}
+
+func postWebhook(url string, input digest.DigestInput) error {
+	jsonFormatter := digest.NewJSON()
+	var buf bytes.Buffer
+	if err := jsonFormatter.Format(&buf, input); err != nil {
+		return fmt.Errorf("format json: %w", err)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(url, "application/json", &buf)
+	if err != nil {
+		return fmt.Errorf("post: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func storePostToSourcePost(p store.Post) source.Post {
