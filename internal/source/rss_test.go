@@ -1,6 +1,10 @@
 package source
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -240,5 +244,112 @@ func TestPostsFromFeed_Empty(t *testing.T) {
 	posts := postsFromFeed(feed, "https://example.com/feed.xml", time.Now())
 	if len(posts) != 0 {
 		t.Errorf("got %d posts, want 0", len(posts))
+	}
+}
+
+func TestIsRetryableError(t *testing.T) {
+	tests := []struct {
+		err  error
+		want bool
+	}{
+		{nil, false},
+		{fmt.Errorf("timeout exceeded"), true},
+		{fmt.Errorf("Timeout waiting for response"), true},
+		{fmt.Errorf("connection refused"), true},
+		{fmt.Errorf("no such host"), true},
+		{fmt.Errorf("HTTP 429 Too Many Requests"), true},
+		{fmt.Errorf("HTTP 500 Internal Server Error"), true},
+		{fmt.Errorf("HTTP 502 Bad Gateway"), true},
+		{fmt.Errorf("HTTP 503 Service Unavailable"), true},
+		{fmt.Errorf("HTTP 504 Gateway Timeout"), true},
+		{fmt.Errorf("HTTP 404 Not Found"), false},
+		{fmt.Errorf("HTTP 403 Forbidden"), false},
+		{fmt.Errorf("parse error: invalid XML"), false},
+	}
+
+	for _, tt := range tests {
+		got := isRetryableError(tt.err)
+		if got != tt.want {
+			t.Errorf("isRetryableError(%v) = %v, want %v", tt.err, got, tt.want)
+		}
+	}
+}
+
+func TestFetchWithRetry_TransientThenSuccess(t *testing.T) {
+	// Override sleep to be instant in tests
+	oldSleep := rssSleepFunc
+	rssSleepFunc = func(_ time.Duration) {}
+	t.Cleanup(func() { rssSleepFunc = oldSleep })
+
+	var calls atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		n := calls.Add(1)
+		if n <= 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		now := time.Now().Format(time.RFC3339)
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprintf(w, `<?xml version="1.0"?>
+<rss version="2.0">
+  <channel>
+    <title>Test Feed</title>
+    <item>
+      <title>Test Item</title>
+      <link>https://example.com/1</link>
+      <guid>1</guid>
+      <pubDate>%s</pubDate>
+    </item>
+  </channel>
+</rss>`, now)
+	}))
+	defer ts.Close()
+
+	posts, err := fetchWithRetry(ts.URL, time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("fetchWithRetry: %v", err)
+	}
+	if len(posts) != 1 {
+		t.Fatalf("got %d posts, want 1", len(posts))
+	}
+	if calls.Load() != 3 {
+		t.Errorf("expected 3 attempts, got %d", calls.Load())
+	}
+}
+
+func TestFetchWithRetry_PermanentFailure(t *testing.T) {
+	oldSleep := rssSleepFunc
+	rssSleepFunc = func(_ time.Duration) {}
+	t.Cleanup(func() { rssSleepFunc = oldSleep })
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	_, err := fetchWithRetry(ts.URL, time.Now().Add(-time.Hour))
+	if err == nil {
+		t.Fatal("expected error for 404")
+	}
+}
+
+func TestFetchWithRetry_AllRetriesFail(t *testing.T) {
+	oldSleep := rssSleepFunc
+	rssSleepFunc = func(_ time.Duration) {}
+	t.Cleanup(func() { rssSleepFunc = oldSleep })
+
+	var calls atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer ts.Close()
+
+	_, err := fetchWithRetry(ts.URL, time.Now().Add(-time.Hour))
+	if err == nil {
+		t.Fatal("expected error after all retries exhausted")
+	}
+	if calls.Load() != 3 {
+		t.Errorf("expected 3 attempts, got %d", calls.Load())
 	}
 }
