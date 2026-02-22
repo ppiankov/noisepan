@@ -6,6 +6,28 @@
 
 Local-only signal extractor for noisy information streams. Telegram, RSS, Reddit sources. Deterministic keyword scoring, no ML. Terminal-first digest.
 
+## Project Status
+
+**Status: Beta** · **v0.4.0** · Pre-1.0
+
+| Milestone | Status |
+|-----------|--------|
+| Core pipeline (pull/score/digest) | Complete |
+| Sources (RSS, Telegram, forge-plan) | Complete |
+| Output formats (terminal, JSON, markdown) | Complete |
+| Stats, trending, rescore | Complete |
+| Entropia verification integration | Complete |
+| Test coverage >85% | Complete |
+| CI pipeline (test/lint) | Complete |
+| Homebrew distribution | Complete |
+| Performance (parallel RSS, indexes, retry) | Complete |
+| API stability guarantees | Partial |
+| v1.0 release | Planned |
+
+Pre-1.0: CLI flags and YAML config schemas may change between minor versions. JSON output structure is stable.
+
+---
+
 ## Why This Exists
 
 You are not lazy. You are overloaded.
