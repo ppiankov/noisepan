@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -351,5 +352,142 @@ func TestFetchWithRetry_AllRetriesFail(t *testing.T) {
 	}
 	if calls.Load() != 3 {
 		t.Errorf("expected 3 attempts, got %d", calls.Load())
+	}
+}
+
+func TestFeedDomain(t *testing.T) {
+	tests := []struct {
+		url  string
+		want string
+	}{
+		{"https://reddit.com/r/devops/.rss", "reddit.com"},
+		{"https://www.example.com/feed.xml", "www.example.com"},
+		{"http://localhost:8080/feed", "localhost:8080"},
+		{"not-a-url", "not-a-url"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			if got := feedDomain(tt.url); got != tt.want {
+				t.Errorf("feedDomain(%q) = %q, want %q", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFetch_DomainSerialization(t *testing.T) {
+	oldSleep := rssSleepFunc
+	rssSleepFunc = func(_ time.Duration) {}
+	t.Cleanup(func() { rssSleepFunc = oldSleep })
+
+	var concurrent atomic.Int32
+	var maxConcurrent atomic.Int32
+
+	now := time.Now().Format(time.RFC3339)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		cur := concurrent.Add(1)
+		for {
+			old := maxConcurrent.Load()
+			if cur <= old || maxConcurrent.CompareAndSwap(old, cur) {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+		concurrent.Add(-1)
+
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprintf(w, `<?xml version="1.0"?>
+<rss version="2.0">
+  <channel>
+    <title>Test</title>
+    <item>
+      <title>Post</title>
+      <link>https://example.com/1</link>
+      <guid>1</guid>
+      <pubDate>%s</pubDate>
+    </item>
+  </channel>
+</rss>`, now)
+	}))
+	defer ts.Close()
+
+	// 5 feeds on the same domain — must be serialized.
+	feeds := make([]string, 5)
+	for i := range feeds {
+		feeds[i] = fmt.Sprintf("%s/feed/%d", ts.URL, i)
+	}
+
+	rs, err := NewRSS(feeds)
+	if err != nil {
+		t.Fatalf("NewRSS: %v", err)
+	}
+
+	posts, err := rs.Fetch(time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(posts) != 5 {
+		t.Errorf("got %d posts, want 5", len(posts))
+	}
+	if maxConcurrent.Load() > 1 {
+		t.Errorf("max concurrent requests to same domain = %d, want 1", maxConcurrent.Load())
+	}
+}
+
+func TestFetch_DomainDelay(t *testing.T) {
+	oldSleep := rssSleepFunc
+	var mu sync.Mutex
+	var delays []time.Duration
+	rssSleepFunc = func(d time.Duration) {
+		mu.Lock()
+		delays = append(delays, d)
+		mu.Unlock()
+	}
+	t.Cleanup(func() { rssSleepFunc = oldSleep })
+
+	now := time.Now().Format(time.RFC3339)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprintf(w, `<?xml version="1.0"?>
+<rss version="2.0">
+  <channel>
+    <title>Test</title>
+    <item>
+      <title>Post</title>
+      <link>https://example.com/1</link>
+      <guid>1</guid>
+      <pubDate>%s</pubDate>
+    </item>
+  </channel>
+</rss>`, now)
+	}))
+	defer ts.Close()
+
+	// 3 feeds on the same domain — expect 2 domain delays.
+	feeds := []string{
+		ts.URL + "/feed/a",
+		ts.URL + "/feed/b",
+		ts.URL + "/feed/c",
+	}
+
+	rs, err := NewRSS(feeds)
+	if err != nil {
+		t.Fatalf("NewRSS: %v", err)
+	}
+
+	_, err = rs.Fetch(time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	domainDelays := 0
+	for _, d := range delays {
+		if d == rssDomainDelay {
+			domainDelays++
+		}
+	}
+	if domainDelays != 2 {
+		t.Errorf("domain delays = %d, want 2 (between 3 same-domain feeds)", domainDelays)
 	}
 }

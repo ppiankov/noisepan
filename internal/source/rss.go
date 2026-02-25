@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ const (
 	rssUserAgent    = "Mozilla/5.0 (compatible; noisepan/1.0; +https://github.com/ppiankov/noisepan)"
 	rssMaxWorkers   = 10
 	rssMaxRetries   = 3
+	rssDomainDelay  = 2 * time.Second
 )
 
 var (
@@ -51,12 +53,19 @@ func (rs *RSSSource) Fetch(since time.Time) ([]Post, error) {
 		url   string
 	}
 
-	jobs := make(chan string, len(rs.feeds))
+	// Group feeds by domain so same-domain requests are serialized.
+	domainFeeds := make(map[string][]string)
+	for _, feedURL := range rs.feeds {
+		d := feedDomain(feedURL)
+		domainFeeds[d] = append(domainFeeds[d], feedURL)
+	}
+
 	results := make(chan result, len(rs.feeds))
+	domainJobs := make(chan []string, len(domainFeeds))
 
 	workers := rssMaxWorkers
-	if len(rs.feeds) < workers {
-		workers = len(rs.feeds)
+	if len(domainFeeds) < workers {
+		workers = len(domainFeeds)
 	}
 
 	var wg sync.WaitGroup
@@ -64,17 +73,22 @@ func (rs *RSSSource) Fetch(since time.Time) ([]Post, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for feedURL := range jobs {
-				items, err := fetchWithRetry(feedURL, since)
-				results <- result{posts: items, err: err, url: feedURL}
+			for feeds := range domainJobs {
+				for i, feedURL := range feeds {
+					if i > 0 {
+						rssSleepFunc(rssDomainDelay)
+					}
+					items, err := fetchWithRetry(feedURL, since)
+					results <- result{posts: items, err: err, url: feedURL}
+				}
 			}
 		}()
 	}
 
-	for _, feedURL := range rs.feeds {
-		jobs <- feedURL
+	for _, feeds := range domainFeeds {
+		domainJobs <- feeds
 	}
-	close(jobs)
+	close(domainJobs)
 
 	go func() {
 		wg.Wait()
@@ -91,6 +105,15 @@ func (rs *RSSSource) Fetch(since time.Time) ([]Post, error) {
 	}
 
 	return posts, nil
+}
+
+// feedDomain extracts the host from a feed URL for rate limiting grouping.
+func feedDomain(feedURL string) string {
+	u, err := url.Parse(feedURL)
+	if err != nil || u.Host == "" {
+		return feedURL
+	}
+	return u.Host
 }
 
 // rssTransport injects a User-Agent header into every request.
