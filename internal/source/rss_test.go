@@ -258,7 +258,7 @@ func TestIsRetryableError(t *testing.T) {
 		{fmt.Errorf("Timeout waiting for response"), true},
 		{fmt.Errorf("connection refused"), true},
 		{fmt.Errorf("no such host"), true},
-		{fmt.Errorf("HTTP 429 Too Many Requests"), true},
+		{fmt.Errorf("HTTP 429 Too Many Requests"), false},
 		{fmt.Errorf("HTTP 500 Internal Server Error"), true},
 		{fmt.Errorf("HTTP 502 Bad Gateway"), true},
 		{fmt.Errorf("HTTP 503 Service Unavailable"), true},

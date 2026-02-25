@@ -162,8 +162,8 @@ func isRetryableError(err error) bool {
 	if strings.Contains(s, "connection refused") || strings.Contains(s, "no such host") {
 		return true
 	}
-	// HTTP 429 (rate limit) and 5xx errors
-	if strings.Contains(s, "429") || strings.Contains(s, "500") ||
+	// HTTP 5xx errors (server-side, worth retrying)
+	if strings.Contains(s, "500") ||
 		strings.Contains(s, "502") || strings.Contains(s, "503") || strings.Contains(s, "504") {
 		return true
 	}
