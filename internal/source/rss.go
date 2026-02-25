@@ -21,7 +21,7 @@ const (
 	rssUserAgent    = "Mozilla/5.0 (compatible; noisepan/1.0; +https://github.com/ppiankov/noisepan)"
 	rssMaxWorkers   = 10
 	rssMaxRetries   = 3
-	rssDomainDelay  = 2 * time.Second
+	rssDomainDelay  = 3 * time.Second
 )
 
 var (
