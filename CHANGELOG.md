@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.3]
+
+- Fix: increase per-domain delay from 2s to 3s — 2s still triggered 429s on tail end of 19 Reddit feeds
+
 ## [0.4.2]
 
 - Fix: stop retrying HTTP 429 responses — retries worsen rate limiting with many same-domain feeds

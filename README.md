@@ -9,7 +9,7 @@ Local-only signal extractor for noisy information streams. Telegram, RSS, Reddit
 
 ## Project Status
 
-**Status: Beta** · **v0.4.2** · Pre-1.0
+**Status: Beta** · **v0.4.3** · Pre-1.0
 
 | Milestone | Status |
 |-----------|--------|
