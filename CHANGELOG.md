@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.2]
+
+- Fix: stop retrying HTTP 429 responses — retries worsen rate limiting with many same-domain feeds
+
 ## [0.4.1]
 
 - Per-domain rate limiting for RSS parallel fetcher: same-domain feeds serialized with 2s delay, different domains fetched in parallel (fixes Reddit 429s with 15+ subreddit feeds)
