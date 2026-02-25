@@ -9,7 +9,7 @@ Local-only signal extractor for noisy information streams. Telegram, RSS, Reddit
 
 ## Project Status
 
-**Status: Beta** · **v0.4.0** · Pre-1.0
+**Status: Beta** · **v0.4.1** · Pre-1.0
 
 | Milestone | Status |
 |-----------|--------|
@@ -21,7 +21,7 @@ Local-only signal extractor for noisy information streams. Telegram, RSS, Reddit
 | Test coverage >85% | Complete |
 | CI pipeline (test/lint) | Complete |
 | Homebrew distribution | Complete |
-| Performance (parallel RSS, indexes, retry) | Complete |
+| Performance (parallel RSS, indexes, retry, per-domain rate limiting) | Complete |
 | API stability guarantees | Partial |
 | v1.0 release | Planned |
 
