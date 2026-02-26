@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.0]
+
+- Hacker News source: native Firebase API integration with min_points filtering (`sources.hn.min_points`)
+- Taste profile: sovereignty, antitrust, safety, surveillance, deanonymization keywords and policy label
+- Doctor: blind spot warning when >95% of posts are ignored (taste profile may be too narrow)
+
 ## [0.4.3]
 
 - Fix: increase per-domain delay from 2s to 3s — 2s still triggered 429s on tail end of 19 Reddit feeds
