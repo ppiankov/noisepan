@@ -72,6 +72,14 @@ func pullAction(cmd *cobra.Command, _ []string) error {
 		sources = append(sources, rd)
 	}
 
+	if cfg.Sources.HN.MinPoints > 0 {
+		hn, err := source.NewHN(cfg.Sources.HN.MinPoints)
+		if err != nil {
+			return fmt.Errorf("create hn source: %w", err)
+		}
+		sources = append(sources, hn)
+	}
+
 	if cfg.Sources.ForgePlan.Script != "" {
 		fp, err := source.NewForgePlan(cfg.Sources.ForgePlan.Script)
 		if err != nil {

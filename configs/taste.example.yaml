@@ -18,6 +18,15 @@ weights:
     "outage": 4
     "zero-day": 5
     "drift": 3
+    "sovereignty": 4
+    "antitrust": 4
+    "sanctions": 3
+    "safety pledge": 5
+    "deanonymization": 5
+    "surveillance": 4
+    "data localization": 4
+    "military contract": 4
+    "regulatory": 3
 
   low_signal:
     "hiring": -3
@@ -48,6 +57,12 @@ labels:
     - "root cause"
     - "outage"
     - "incident"
+  policy:
+    - "sovereignty"
+    - "antitrust"
+    - "sanctions"
+    - "regulatory"
+    - "surveillance"
 
 rules:
   - if:
@@ -79,6 +94,12 @@ rules:
     then:
       score_add: 4
       labels: ["ops"]
+
+  - if:
+      contains_any: ["sovereignty", "antitrust", "safety pledge", "deanonymization", "surveillance"]
+    then:
+      score_add: 4
+      labels: ["policy"]
 
 thresholds:
   read_now: 7

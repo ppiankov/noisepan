@@ -36,12 +36,15 @@ func doctorAction(_ *cobra.Command, _ []string) error {
 		printCheck(false, "config.yaml: %v", err)
 		ok = false
 	} else {
-		fpScript := ""
+		extras := ""
+		if cfg.Sources.HN.MinPoints > 0 {
+			extras += ", hn"
+		}
 		if cfg.Sources.ForgePlan.Script != "" {
-			fpScript = ", forgeplan"
+			extras += ", forgeplan"
 		}
 		printCheck(true, "config.yaml (%d telegram channels, %d rss feeds, %d subreddits%s)",
-			len(cfg.Sources.Telegram.Channels), len(cfg.Sources.RSS.Feeds), len(cfg.Sources.Reddit.Subreddits), fpScript)
+			len(cfg.Sources.Telegram.Channels), len(cfg.Sources.RSS.Feeds), len(cfg.Sources.Reddit.Subreddits), extras)
 	}
 
 	// Taste profile
@@ -141,13 +144,25 @@ func checkFeedHealth(db *store.Store, cfg *config.Config) {
 	staleThreshold := time.Now().AddDate(0, 0, -staleDays)
 	fmt.Println()
 
+	var totalPosts, totalIgnored int
 	for _, cs := range stats {
+		totalPosts += cs.Total
+		totalIgnored += cs.Ignored
+
 		if cs.LastSeen.Before(staleThreshold) {
 			daysAgo := int(time.Since(cs.LastSeen).Hours() / 24)
 			printInfo("stale: %s — last post %d days ago", cs.Channel, daysAgo)
 		}
 		if cs.Total >= 5 && cs.Ignored == cs.Total {
 			printInfo("all noise: %s — %d posts, all ignored (consider adjusting taste profile)", cs.Channel, cs.Total)
+		}
+	}
+
+	// Warn if taste profile is too narrow — high ignore rate means important stories may be buried.
+	if totalPosts >= 50 {
+		ignoreRate := float64(totalIgnored) / float64(totalPosts) * 100
+		if ignoreRate > 95 {
+			printInfo("blind spot risk: %.0f%% of %d posts ignored — taste profile may be too narrow, important stories could be buried in noise", ignoreRate, totalPosts)
 		}
 	}
 }
